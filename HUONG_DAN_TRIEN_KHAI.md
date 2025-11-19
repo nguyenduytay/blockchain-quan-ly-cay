@@ -3,6 +3,7 @@
 ## Tổng quan
 
 Dự án xây dựng hệ thống quản lý cây trồng trên Hyperledger Fabric với 3 thành phần chính:
+
 1. **Chaincode** (Smart Contract) - Quản lý logic nghiệp vụ
 2. **Backend API Server** - Cung cấp REST API
 3. **Frontend Web App** - Giao diện người dùng React
@@ -10,12 +11,37 @@ Dự án xây dựng hệ thống quản lý cây trồng trên Hyperledger Fabr
 ## Bước 1: Chuẩn bị môi trường
 
 ### Yêu cầu hệ thống
-- Hyperledger Fabric đã được cài đặt
+
+- Hyperledger Fabric đã được cài đặt trên VMHyper
 - Node.js >= 14.x
 - npm hoặc yarn
 - Docker và Docker Compose
 
+### Truy cập VMHyper
+
+**Cách 1: SSH từ Command Prompt (Windows)**
+
+```bash
+ssh -p 15 sv102102666@wandertour.ddns.net
+# Password: 123456
+```
+
+**Cách 2: Sử dụng MobaXterm**
+
+- Hostname: `wandertour.ddns.net`
+- Port: `15`
+- Username: `sv102102666` (thay bằng username của bạn)
+- Password: `123456`
+
+**Cách 3: SSH đến IP trực tiếp (nếu có)**
+
+```bash
+ssh hyperledger@192.168.1.15
+# Password: 123456
+```
+
 ### Kiểm tra môi trường
+
 ```bash
 # Kiểm tra Node.js
 node --version
@@ -31,8 +57,18 @@ docker --version
 
 ### 2.1. Tạo thư mục chaincode
 
+**Cách 1: Đặt tại `/fabric-samples/chaincode/` (thông thường)**
+
 ```bash
 cd /fabric-samples/chaincode/
+mkdir -p qlcaytrong/javascript
+cd qlcaytrong/javascript
+```
+
+**Cách 2: Đặt tại `/fabric-samples/qlcaytrong/` (theo tài liệu lab)**
+
+```bash
+cd /fabric-samples/
 mkdir -p qlcaytrong/javascript
 cd qlcaytrong/javascript
 ```
@@ -40,6 +76,7 @@ cd qlcaytrong/javascript
 ### 2.2. Copy các file chaincode
 
 Copy các file từ thư mục `chaincode/javascript/` của dự án:
+
 - `qlcaytrong.js`
 - `index.js`
 - `package.json`
@@ -51,6 +88,7 @@ npm install
 ```
 
 Kiểm tra cài đặt:
+
 ```bash
 npm list fabric-contract-api fabric-shim
 ```
@@ -73,6 +111,15 @@ cd /fabric-samples/test-network
 ```
 
 ### 3.2. Deploy chaincode (Cách tự động - Khuyến nghị)
+
+**Nếu chaincode đặt tại `/fabric-samples/qlcaytrong/` (theo tài liệu):**
+
+```bash
+# Deploy chaincode qlcaytrong
+./network.sh deployCC -ccn qlcaytrong -ccp ../qlcaytrong/ -ccl javascript
+```
+
+**Nếu chaincode đặt tại `/fabric-samples/chaincode/qlcaytrong/`:**
 
 ```bash
 # Deploy chaincode qlcaytrong
@@ -101,13 +148,16 @@ docker ps
 
 ```bash
 cd ~
-mkdir -p qlcaytrong-backend
-cd qlcaytrong-backend
+mkdir -p qlcaytrong/qlcaytrong-backend
+cd qlcaytrong/qlcaytrong-backend
 ```
+
+**Lưu ý:** Theo tài liệu lab, backend nên đặt trong thư mục `~/qlcaytrong/qlcaytrong-backend/` (có thư mục cha `qlcaytrong`)
 
 ### 4.2. Copy các file backend
 
-Copy các file từ thư mục `backend/`:
+Copy các file từ thư mục `backend/` hoặc `qlcaytrong-backend/` của dự án:
+
 - `server.js`
 - `package.json`
 - `enrollAdmin.js`
@@ -126,8 +176,9 @@ node enrollAdmin.js
 ```
 
 Kết quả mong đợi:
+
 ```
-Wallet path: /home/user/qlcaytrong-backend/wallet
+Wallet path: /home/user/qlcaytrong/qlcaytrong-backend/wallet
 Successfully enrolled admin user "admin" and imported it into the wallet
 ```
 
@@ -140,11 +191,13 @@ const USER_NAME = "sv102102666"; // Thay bằng mã sinh viên của bạn
 ```
 
 Sau đó chạy:
+
 ```bash
 node registerUser.js
 ```
 
 Kết quả mong đợi:
+
 ```
 Successfully registered and enrolled user "sv102102666"
 ```
@@ -152,14 +205,16 @@ Successfully registered and enrolled user "sv102102666"
 ### 4.6. Cấu hình USER_NAME trong server.js (nếu cần)
 
 Nếu muốn sử dụng biến môi trường:
+
 ```bash
 export USER_NAME=sv102102666
 node server.js
 ```
 
 Hoặc sửa trực tiếp trong `server.js`:
+
 ```javascript
-const userName = process.env.USER_NAME || 'sv102102666'; // Thay bằng mã của bạn
+const userName = process.env.USER_NAME || "sv102102666"; // Thay bằng mã của bạn
 ```
 
 ### 4.7. Khởi động Backend Server
@@ -169,6 +224,7 @@ node server.js
 ```
 
 Server sẽ chạy trên port 3006. Kiểm tra:
+
 ```bash
 curl http://localhost:3006/health
 ```
@@ -179,13 +235,16 @@ curl http://localhost:3006/health
 
 ```bash
 cd ~
-mkdir -p qlcaytrong-frontend
-cd qlcaytrong-frontend
+mkdir -p qlcaytrong/qlcaytrong-frontend
+cd qlcaytrong/qlcaytrong-frontend
 ```
+
+**Lưu ý:** Theo tài liệu lab, frontend nên đặt trong thư mục `~/qlcaytrong/qlcaytrong-frontend/` (có thư mục cha `qlcaytrong`)
 
 ### 5.2. Copy các file frontend
 
-Copy toàn bộ thư mục `frontend/` bao gồm:
+Copy toàn bộ thư mục `frontend/` hoặc `qlcaytrong-frontend/` của dự án bao gồm:
+
 - `package.json`
 - `public/index.html`
 - `src/App.js`
@@ -202,9 +261,20 @@ npm install
 
 ### 5.4. Cấu hình API URL (nếu cần)
 
-Nếu API server chạy trên địa chỉ khác, tạo file `.env`:
+**Nếu API server chạy trên localhost:**
+
 ```bash
-echo "REACT_APP_API_URL=http://localhost:3006/api" > .env
+# Không cần cấu hình, mặc định sẽ dùng localhost:3006
+```
+
+**Nếu API server chạy trên địa chỉ khác hoặc truy cập từ xa:**
+Tạo file `.env`:
+
+```bash
+# Nếu truy cập từ máy khác đến VMHyper
+echo "REACT_APP_API_URL=http://192.168.1.15:3006/api" > .env
+# Hoặc
+echo "REACT_APP_API_URL=http://wandertour.ddns.net:3006/api" > .env
 ```
 
 ### 5.5. Khởi động Frontend App
@@ -214,6 +284,12 @@ PORT=8006 npm start
 ```
 
 App sẽ mở tự động trên trình duyệt tại `http://localhost:8006`
+
+**Truy cập từ máy khác (nếu VMHyper có IP công khai):**
+
+- Nếu VMHyper có IP: `192.168.1.15` hoặc `wandertour.ddns.net`
+- Truy cập: `http://192.168.1.15:8006` hoặc `http://wandertour.ddns.net:8006`
+- **Lưu ý:** Đảm bảo firewall cho phép port 8006
 
 ## Bước 6: Kiểm tra và Test
 
@@ -304,22 +380,27 @@ peer chaincode query -C mychannel -n qlcaytrong \
 ## Xử lý lỗi thường gặp
 
 ### Lỗi: "User does not exist in wallet"
+
 - **Nguyên nhân**: Chưa đăng ký user
 - **Giải pháp**: Chạy `node registerUser.js`
 
 ### Lỗi: "Cannot connect to peer"
+
 - **Nguyên nhân**: Fabric network chưa khởi động
 - **Giải pháp**: Kiểm tra `docker ps` và khởi động lại network
 
 ### Lỗi: "Chaincode not found"
+
 - **Nguyên nhân**: Chaincode chưa được deploy
 - **Giải pháp**: Deploy lại chaincode bằng `./network.sh deployCC`
 
 ### Lỗi: "CORS error" trong frontend
+
 - **Nguyên nhân**: Backend không cho phép CORS
 - **Giải pháp**: Kiểm tra `cors()` middleware trong `server.js`
 
 ### Lỗi: "Connection refused" trong frontend
+
 - **Nguyên nhân**: Backend server chưa chạy hoặc sai port
 - **Giải pháp**: Kiểm tra backend đang chạy trên port 3006
 
@@ -342,10 +423,43 @@ peer chaincode query -C mychannel -n qlcaytrong \
 ## Tổng kết
 
 Sau khi hoàn thành các bước trên, bạn sẽ có:
+
 - ✅ Chaincode đã được deploy lên Fabric network
 - ✅ Backend API server chạy trên port 3006
 - ✅ Frontend React app chạy trên port 8006
 - ✅ Hệ thống quản lý cây trồng hoàn chỉnh trên blockchain
 
-Chúc bạn thành công! 🌳
+## Cấu trúc thư mục cuối cùng trên VMHyper
 
+```
+/fabric-samples/
+├── qlcaytrong/                    # Chaincode (theo tài liệu)
+│   └── javascript/
+│       ├── qlcaytrong.js
+│       ├── index.js
+│       └── package.json
+└── test-network/                  # Fabric network
+
+~/qlcaytrong/
+├── qlcaytrong-backend/            # Backend API Server
+│   ├── server.js
+│   ├── enrollAdmin.js
+│   ├── registerUser.js
+│   ├── package.json
+│   └── wallet/
+└── qlcaytrong-frontend/           # Frontend React App
+    ├── src/
+    ├── public/
+    └── package.json
+```
+
+## Lưu ý quan trọng
+
+1. **Vị trí chaincode:** Có thể đặt tại `/fabric-samples/qlcaytrong/` (theo tài liệu) hoặc `/fabric-samples/chaincode/qlcaytrong/`
+2. **Lệnh deploy:** Phải khớp với vị trí chaincode:
+   - Nếu tại `/fabric-samples/qlcaytrong/`: `-ccp ../qlcaytrong/`
+   - Nếu tại `/fabric-samples/chaincode/qlcaytrong/`: `-ccp ../chaincode/qlcaytrong/`
+3. **Backend và Frontend:** Nên đặt trong thư mục `~/qlcaytrong/` để dễ quản lý
+4. **Tên chaincode:** Luôn là `qlcaytrong` (không có dấu gạch ngang) khi deploy
+
+Chúc bạn thành công! 🌳
