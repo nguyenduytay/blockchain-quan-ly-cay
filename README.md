@@ -23,7 +23,9 @@ qlcay/
 │   ├── registerUser.js         # Đăng ký user
 │   ├── package.json            # Dependencies
 │   └── wallet/                 # Wallet chứa identities
-└── qlcaytrong-frontend/        # ⚠️ Nên đổi từ "frontend/" thành "qlcaytrong-frontend/"
+└── qlcaytrong-frontend/        # ⚠️ Nên đổi từ "frontend/" thành 
+~/qlcaytrong/
+"qlcaytrong-frontend/"
     ├── src/
     │   ├── components/
     │   │   └── CayTrongTable.js

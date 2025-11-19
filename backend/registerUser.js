@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Khai bao bien USER_NAME - Thay doi theo ma sinh vien cua ban
-const USER_NAME = process.env.USER_NAME || "appUser";
+const USER_NAME = "appUser";
 
 async function registerUser() {
     try {
