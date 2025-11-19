@@ -8,6 +8,8 @@ Dự án xây dựng hệ thống quản lý cây trồng sử dụng Hyperledge
 
 ## Cấu trúc dự án
 
+**Theo chuẩn tài liệu lab, cấu trúc đúng như sau:**
+
 ```
 qlcay/
 ├── chaincode/
@@ -15,12 +17,13 @@ qlcay/
 │       ├── qlcaytrong.js      # Chaincode chính
 │       ├── index.js            # Export module
 │       └── package.json        # Dependencies
-├── backend/
+├── qlcaytrong-backend/         # ⚠️ Nên đổi từ "backend/" thành "qlcaytrong-backend/"
 │   ├── server.js               # API Server
 │   ├── enrollAdmin.js          # Đăng ký admin
 │   ├── registerUser.js         # Đăng ký user
-│   └── package.json            # Dependencies
-└── frontend/
+│   ├── package.json            # Dependencies
+│   └── wallet/                 # Wallet chứa identities
+└── qlcaytrong-frontend/        # ⚠️ Nên đổi từ "frontend/" thành "qlcaytrong-frontend/"
     ├── src/
     │   ├── components/
     │   │   └── CayTrongTable.js
@@ -34,11 +37,22 @@ qlcay/
     └── package.json
 ```
 
+**Lưu ý:**
+
+- Trên server Linux, chaincode nên đặt tại: `/fabric-samples/qlcaytrong/javascript/`
+- Backend nên đặt tại: `~/qlcaytrong/qlcaytrong-backend/`
+- Frontend nên đặt tại: `~/qlcaytrong/qlcaytrong-frontend/`
+
+**Để đổi tên thư mục trên Windows:** Chạy script `doi-ten-thu-muc.ps1` trong PowerShell
+
 ## Cài đặt và triển khai
 
 ### 1. Chaincode
 
+**Trên server Linux:**
+
 ```bash
+# Tạo thư mục chaincode
 cd /fabric-samples/chaincode/
 mkdir qlcaytrong
 cd qlcaytrong
@@ -49,6 +63,8 @@ cd javascript
 # Sau đó cài đặt dependencies:
 npm install
 ```
+
+**Hoặc đặt tại:** `/fabric-samples/qlcaytrong/javascript/` (theo tài liệu)
 
 ### 2. Deploy Chaincode
 
@@ -61,20 +77,28 @@ cd /fabric-samples/test-network
 # Tạo channel
 ./network.sh createChannel
 
-# Deploy chaincode
+# Deploy chaincode (theo tài liệu)
+./network.sh deployCC -ccn qlcaytrong -ccp ../qlcaytrong/ -ccl javascript
+
+# Hoặc nếu đặt tại chaincode/
 ./network.sh deployCC -ccn qlcaytrong -ccp ../chaincode/qlcaytrong/ -ccl javascript
 ```
 
 ### 3. Backend API Server
 
+**Trên server Linux:**
+
 ```bash
-cd backend
+cd ~/qlcaytrong/qlcaytrong-backend
+# Hoặc: cd backend (nếu chưa đổi tên)
+
 npm install
 
 # Đăng ký admin
 node enrollAdmin.js
 
-# Đăng ký user (thay đổi USER_NAME trong registerUser.js)
+# Đăng ký user (thay đổi USER_NAME trong registerUser.js hoặc dùng biến môi trường)
+export USER_NAME="sv102102666"  # Thay bằng mã sinh viên của bạn
 node registerUser.js
 
 # Khởi động server
@@ -85,8 +109,12 @@ Server sẽ chạy trên port 3006.
 
 ### 4. Frontend React App
 
+**Trên server Linux:**
+
 ```bash
-cd frontend
+cd ~/qlcaytrong/qlcaytrong-frontend
+# Hoặc: cd frontend (nếu chưa đổi tên)
+
 npm install
 
 # Khởi động app
@@ -150,10 +178,13 @@ Hệ thống khởi tạo 5 cây trồng mẫu:
 
 ## Lưu ý
 
-1. Đảm bảo Hyperledger Fabric test-network đang chạy trước khi khởi động backend
-2. Thay đổi USER_NAME trong `registerUser.js` theo mã sinh viên của bạn
-3. Đảm bảo đường dẫn connection profile đúng: `/fabric-samples/test-network/organizations/...`
-4. Backend và Frontend cần chạy trên các port khác nhau (3006 và 8006)
+1. **Đặt tên theo chuẩn:** Nên đổi tên thư mục `backend/` → `qlcaytrong-backend/` và `frontend/` → `qlcaytrong-frontend/` để khớp với tài liệu lab
+2. **Chaincode name:** Trong code phải dùng `qlcaytrong` (không có dấu gạch ngang) khi deploy
+3. Đảm bảo Hyperledger Fabric test-network đang chạy trước khi khởi động backend
+4. Thay đổi USER_NAME trong `registerUser.js` hoặc dùng biến môi trường `export USER_NAME="sv102102666"` theo mã sinh viên của bạn
+5. Đảm bảo đường dẫn connection profile đúng: `/fabric-samples/test-network/organizations/...`
+6. Backend và Frontend cần chạy trên các port khác nhau (3006 và 8006)
+7. **Vị trí chaincode trên server:** Nên đặt tại `/fabric-samples/qlcaytrong/javascript/` theo tài liệu
 
 ## Tác giả
 
