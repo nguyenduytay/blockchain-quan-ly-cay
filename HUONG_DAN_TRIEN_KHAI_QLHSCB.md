@@ -222,7 +222,7 @@ node server.js
 Hoặc sửa trực tiếp trong `server.js`:
 
 ```javascript
-const userName = process.env.USER_NAME || "sv102220083"; 
+const userName = process.env.USER_NAME; 
 ```
 
 ### 4.7. Khởi động Backend Server
