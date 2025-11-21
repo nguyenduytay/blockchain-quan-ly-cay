@@ -6,18 +6,29 @@ import './App.css';
 function App() {
   return (
     <div className="App">
-      <div className="bg-primary text-white py-3 mb-4">
-        <div className="container">
-          <h1 className="mb-0">👔 Hệ Thống Quản Lý Hồ Sơ Cán Bộ Blockchain</h1>
-          <p className="mb-0">Powered by Hyperledger Fabric & React.js</p>
+      <header className="app-header">
+        <div className="header-content">
+          <div className="header-icon">👔</div>
+          <div className="header-text">
+            <h1 className="header-title">Hệ Thống Quản Lý Hồ Sơ Cán Bộ</h1>
+            <p className="header-subtitle">Blockchain Technology - Hyperledger Fabric</p>
+          </div>
         </div>
-      </div>
+        <div className="header-wave">
+          <svg viewBox="0 0 1200 120" preserveAspectRatio="none">
+            <path d="M0,60 C300,100 600,20 900,60 C1050,80 1125,70 1200,60 L1200,120 L0,120 Z" fill="currentColor"></path>
+          </svg>
+        </div>
+      </header>
       
       <HoSoCanBoTable />
       
-      <footer className="bg-dark text-white text-center py-3 mt-5">
+      <footer className="app-footer">
         <div className="container">
-          <p className="mb-0">© 2024 QLHoSoCanBo Blockchain App - Hyperledger Fabric</p>
+          <div className="footer-content">
+            <p className="footer-text">© 2024 QLHoSoCanBo Blockchain Application</p>
+            <p className="footer-tech">Powered by Hyperledger Fabric & React.js</p>
+          </div>
         </div>
       </footer>
     </div>

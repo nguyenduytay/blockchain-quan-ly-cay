@@ -202,42 +202,56 @@ function HoSoCanBoTable() {
       {/* Statistics Cards */}
       <Row className="mb-4">
         <Col md={4}>
-          <Card className="text-center">
+          <Card className="text-center stat-card stat-card-primary">
             <Card.Body>
+              <div className="stat-icon">👥</div>
               <Card.Title>Tổng số cán bộ</Card.Title>
-              <Card.Text className="h3 text-primary">{stats.total}</Card.Text>
+              <Card.Text className="h3 stat-number text-primary">{stats.total}</Card.Text>
             </Card.Body>
           </Card>
         </Col>
         <Col md={4}>
-          <Card className="text-center">
+          <Card className="text-center stat-card stat-card-success">
             <Card.Body>
+              <div className="stat-icon">💰</div>
               <Card.Title>Tổng lương</Card.Title>
-              <Card.Text className="h3 text-success">{formatCurrency(stats.totalLuong)}</Card.Text>
+              <Card.Text className="h3 stat-number text-success">{formatCurrency(stats.totalLuong)}</Card.Text>
             </Card.Body>
           </Card>
         </Col>
         <Col md={4}>
-          <Card className="text-center">
+          <Card className="text-center stat-card stat-card-warning">
             <Card.Body>
+              <div className="stat-icon">📊</div>
               <Card.Title>Lương TB</Card.Title>
-              <Card.Text className="h3 text-warning">{formatCurrency(stats.avgLuong)}</Card.Text>
+              <Card.Text className="h3 stat-number text-warning">{formatCurrency(stats.avgLuong)}</Card.Text>
             </Card.Body>
           </Card>
         </Col>
       </Row>
 
       {/* Action Buttons */}
-      <div className="mb-3 d-flex gap-2 flex-wrap">
-        <Button variant="success" onClick={handleInit}>Khởi tạo dữ liệu</Button>
-        <Button variant="primary" onClick={() => handleOpenModal()}>Thêm hồ sơ mới</Button>
-        <Button variant="secondary" onClick={fetchHoSoCanBos}>Làm mới</Button>
+      <div className="mb-4 d-flex gap-2 flex-wrap action-buttons">
+        <Button variant="success" onClick={handleInit} className="action-btn">
+          <span className="btn-icon">🔄</span> Khởi tạo dữ liệu
+        </Button>
+        <Button variant="primary" onClick={() => handleOpenModal()} className="action-btn">
+          <span className="btn-icon">➕</span> Thêm hồ sơ mới
+        </Button>
+        <Button variant="secondary" onClick={fetchHoSoCanBos} className="action-btn">
+          <span className="btn-icon">🔄</span> Làm mới
+        </Button>
       </div>
 
       {/* Filters */}
-      <Row className="mb-3">
+      <Row className="mb-4 filter-section">
         <Col md={6}>
-          <Form.Select value={filterPhongBan} onChange={(e) => setFilterPhongBan(e.target.value)}>
+          <Form.Label className="filter-label">🔍 Lọc theo phòng ban</Form.Label>
+          <Form.Select 
+            value={filterPhongBan} 
+            onChange={(e) => setFilterPhongBan(e.target.value)}
+            className="filter-select"
+          >
             <option value="">Tất cả phòng ban</option>
             {uniquePhongBan.map(phongBan => (
               <option key={phongBan} value={phongBan}>{phongBan}</option>
@@ -245,7 +259,12 @@ function HoSoCanBoTable() {
           </Form.Select>
         </Col>
         <Col md={6}>
-          <Form.Select value={filterChucVu} onChange={(e) => setFilterChucVu(e.target.value)}>
+          <Form.Label className="filter-label">👔 Lọc theo chức vụ</Form.Label>
+          <Form.Select 
+            value={filterChucVu} 
+            onChange={(e) => setFilterChucVu(e.target.value)}
+            className="filter-select"
+          >
             <option value="">Tất cả chức vụ</option>
             {uniqueChucVu.map(chucVu => (
               <option key={chucVu} value={chucVu}>{chucVu}</option>
@@ -304,11 +323,19 @@ function HoSoCanBoTable() {
                       <td>{formatCurrency(record.luong)}</td>
                       <td>{record.diaChi}</td>
                       <td>
-                        <div className="d-flex gap-1 flex-wrap">
-                          <Button size="sm" variant="info" onClick={() => handleOpenModal(item)}>Sửa</Button>
-                          <Button size="sm" variant="warning" onClick={() => handleChangeChucVu(record.maCanBo)}>Thay đổi chức vụ</Button>
-                          <Button size="sm" variant="secondary" onClick={() => handleUpdateLuong(record.maCanBo)}>Cập nhật lương</Button>
-                          <Button size="sm" variant="danger" onClick={() => { setDeleteHoSoCanBo(item); setShowDeleteModal(true); }}>Xóa</Button>
+                        <div className="d-flex gap-1 flex-wrap action-buttons-row">
+                          <Button size="sm" variant="info" onClick={() => handleOpenModal(item)} className="action-btn-sm">
+                            ✏️ Sửa
+                          </Button>
+                          <Button size="sm" variant="warning" onClick={() => handleChangeChucVu(record.maCanBo)} className="action-btn-sm">
+                            👔 CV
+                          </Button>
+                          <Button size="sm" variant="secondary" onClick={() => handleUpdateLuong(record.maCanBo)} className="action-btn-sm">
+                            💰 Lương
+                          </Button>
+                          <Button size="sm" variant="danger" onClick={() => { setDeleteHoSoCanBo(item); setShowDeleteModal(true); }} className="action-btn-sm">
+                            🗑️ Xóa
+                          </Button>
                         </div>
                       </td>
                     </tr>
