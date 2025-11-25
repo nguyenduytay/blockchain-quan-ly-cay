@@ -200,6 +200,117 @@ class QLCayTrong extends Contract {
         console.info('============= END : Cap Nhat Nang Suat ===========');
         return JSON.stringify(caytrong);
     }
+
+    // ============ USER MANAGEMENT FUNCTIONS ============
+    
+    async createUser(ctx, username, password, fullName, email, role) {
+        console.info('============= START : Tao User Moi ===========');
+        const userKey = `USER_${username}`;
+        const exists = await ctx.stub.getState(userKey);
+        if (exists && exists.length > 0) {
+            throw new Error(`User ${username} da ton tai`);
+        }
+
+        const user = {
+            docType: 'user',
+            username: username,
+            password: password, // Trong thuc te nen hash password
+            fullName: fullName,
+            email: email,
+            role: role || 'user',
+            createdAt: new Date().toISOString(),
+            isActive: true
+        };
+
+        await ctx.stub.putState(userKey, Buffer.from(JSON.stringify(user)));
+        console.info(`Da tao user: ${username}`);
+        console.info('============= END : Tao User Moi ===========');
+        return JSON.stringify(user);
+    }
+
+    async getUser(ctx, username) {
+        const userKey = `USER_${username}`;
+        const userAsBytes = await ctx.stub.getState(userKey);
+        if (!userAsBytes || userAsBytes.length === 0) {
+            throw new Error(`User ${username} khong ton tai`);
+        }
+        return userAsBytes.toString();
+    }
+
+    async getAllUsers(ctx) {
+        const startKey = 'USER_';
+        const endKey = 'USER_\uffff';
+        const allResults = [];
+        for await (const {key, value} of ctx.stub.getStateByRange(startKey, endKey)) {
+            const strValue = Buffer.from(value).toString('utf8');
+            let record;
+            try {
+                record = JSON.parse(strValue);
+            } catch (err) {
+                console.log(err);
+                record = strValue;
+            }
+            // Khong tra ve password
+            if (record.password) {
+                delete record.password;
+            }
+            allResults.push({ Key: key, Record: record });
+        }
+        return JSON.stringify(allResults);
+    }
+
+    async updateUser(ctx, username, fullName, email, role) {
+        console.info('============= START : Cap Nhat User ===========');
+        const userKey = `USER_${username}`;
+        const userAsBytes = await ctx.stub.getState(userKey);
+        if (!userAsBytes || userAsBytes.length === 0) {
+            throw new Error(`User ${username} khong ton tai`);
+        }
+
+        const user = JSON.parse(userAsBytes.toString());
+        if (fullName) user.fullName = fullName;
+        if (email) user.email = email;
+        if (role) user.role = role;
+        user.updatedAt = new Date().toISOString();
+
+        await ctx.stub.putState(userKey, Buffer.from(JSON.stringify(user)));
+        console.info(`Da cap nhat user: ${username}`);
+        console.info('============= END : Cap Nhat User ===========');
+        // Khong tra ve password
+        delete user.password;
+        return JSON.stringify(user);
+    }
+
+    async deleteUser(ctx, username) {
+        console.info('============= START : Xoa User ===========');
+        const userKey = `USER_${username}`;
+        const exists = await ctx.stub.getState(userKey);
+        if (!exists || exists.length === 0) {
+            throw new Error(`User ${username} khong ton tai`);
+        }
+        await ctx.stub.deleteState(userKey);
+        console.info(`Da xoa user: ${username}`);
+        console.info('============= END : Xoa User ===========');
+        return `Da xoa user ${username}`;
+    }
+
+    async verifyUser(ctx, username, password) {
+        const userKey = `USER_${username}`;
+        const userAsBytes = await ctx.stub.getState(userKey);
+        if (!userAsBytes || userAsBytes.length === 0) {
+            throw new Error(`User ${username} khong ton tai`);
+        }
+        const user = JSON.parse(userAsBytes.toString());
+        if (user.password !== password) {
+            throw new Error('Mat khau khong dung');
+        }
+        if (!user.isActive) {
+            throw new Error('Tai khoan da bi khoa');
+        }
+        // Khong tra ve password
+        delete user.password;
+        return JSON.stringify(user);
+    }
 }
 
 module.exports = QLCayTrong;

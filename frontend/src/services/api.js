@@ -62,6 +62,33 @@ const testConnection = async () => {
   }
 };
 
+// Add token to requests
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Handle 401 errors (unauthorized)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/';
+    }
+    return Promise.reject(error);
+  }
+);
+
 // API Service
 export const caytrongAPI = {
   // Khoi tao du lieu
@@ -96,6 +123,26 @@ export const caytrongAPI = {
 
   // Test connection
   testConnection: testConnection
+};
+
+// Authentication API
+export const authAPI = {
+  login: (username, password) => api.post('/auth/login', { username, password }),
+  register: (data) => api.post('/auth/register', data),
+  getMe: () => api.get('/auth/me')
+};
+
+// User Management API
+export const userAPI = {
+  getAllUsers: () => api.get('/users'),
+  getUser: (username) => api.get(`/users/${username}`),
+  updateUser: (username, data) => api.put(`/users/${username}`, data),
+  deleteUser: (username) => api.delete(`/users/${username}`)
+};
+
+// Report API
+export const reportAPI = {
+  getReport: () => api.get('/reports')
 };
 
 export { testConnection };
