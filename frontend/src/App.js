@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Login from './components/Login';
+import Register from './components/Register';
 import Navigation from './components/Navigation';
 import HomePage from './components/HomePage';
 import CayTrongTable from './components/CayTrongTable';
@@ -10,27 +11,50 @@ import AccountPage from './components/AccountPage';
 import './App.css';
 
 function App() {
+  // TẤT CẢ HOOKS PHẢI Ở ĐÂY - TRƯỚC BẤT KỲ RETURN NÀO
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
   const [loading, setLoading] = useState(true);
+  const [showRegister, setShowRegister] = useState(false);
 
+  // useEffect phải ở đây - không được đặt sau return
   useEffect(() => {
     // Check if user is already logged in
     const savedToken = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
     
     if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
+      try {
+        setToken(savedToken);
+        setUser(JSON.parse(savedUser));
+      } catch (error) {
+        console.error('Error parsing saved user:', error);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
     }
     setLoading(false);
+
+    // Expose showRegister function globally for Login component
+    window.showRegister = () => setShowRegister(true);
+    
+    return () => {
+      delete window.showRegister;
+    };
   }, []);
 
+  // Các hàm handler
   const handleLogin = (userData, tokenData) => {
-    setUser(userData);
-    setToken(tokenData);
-    setActiveTab('home');
+    console.log('handleLogin được gọi với:', { userData, tokenData });
+    if (userData && tokenData) {
+      setUser(userData);
+      setToken(tokenData);
+      setActiveTab('home');
+      console.log('Đã cập nhật state user và token');
+    } else {
+      console.error('handleLogin: userData hoặc tokenData không hợp lệ');
+    }
   };
 
   const handleLogout = () => {
@@ -63,6 +87,7 @@ function App() {
     }
   };
 
+  // Bây giờ mới được return
   if (loading) {
     return (
       <div className="loading-screen">
@@ -74,6 +99,9 @@ function App() {
   }
 
   if (!user || !token) {
+    if (showRegister) {
+      return <Register onRegisterSuccess={() => setShowRegister(false)} />;
+    }
     return <Login onLogin={handleLogin} />;
   }
 

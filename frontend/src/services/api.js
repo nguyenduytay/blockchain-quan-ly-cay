@@ -1,20 +1,30 @@
 import axios from 'axios';
 
 // Su dung proxy trong development de tranh CORS
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3006/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://192.168.80.10:3006/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 seconds timeout
+  timeout: 30000, // 30 seconds timeout
 });
 
-// Request interceptor de log requests
+// Request interceptor - Add token và log requests
 api.interceptors.request.use(
   (config) => {
-    console.log(`🔄 API Call: ${config.method?.toUpperCase()} ${config.url}`);
+    // Add token to requests
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    
+    // Log request (chỉ trong development)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🔄 API Call: ${config.method?.toUpperCase()} ${config.url}`);
+    }
+    
     return config;
   },
   (error) => {
@@ -23,22 +33,37 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor de xu ly loi
+// Response interceptor - Handle responses và errors
 api.interceptors.response.use(
   (response) => {
-    console.log(`✅ API Success: ${response.status} ${response.config.url}`);
+    // Log success (chỉ trong development)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`✅ API Success: ${response.status} ${response.config.url}`);
+    }
     return response;
   },
   (error) => {
     console.error('❌ API Error:', error);
     
+    // Handle 401/403 errors - Unauthorized
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      // Chỉ redirect nếu không phải đang ở trang login
+      if (!window.location.pathname.includes('/login') && !window.location.pathname === '/') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        // Không redirect ngay, để component tự xử lý
+      }
+    }
+    
+    // Format error message
     if (error.code === 'ECONNREFUSED') {
       error.message = 'Không thể kết nối đến server. Kiểm tra xem API server có đang chạy không?';
-    } else if (error.message.includes('Network Error')) {
+    } else if (error.message.includes('Network Error') || error.code === 'ERR_NETWORK') {
       error.message = 'Lỗi kết nối mạng. Kiểm tra kết nối internet và server.';
     } else if (error.response) {
       // Server tra ve loi HTTP
-      error.message = `Server error: ${error.response.status} - ${error.response.data?.error || error.response.statusText}`;
+      const errorMsg = error.response.data?.error || error.response.data?.message || error.response.statusText;
+      error.message = errorMsg;
     } else if (error.request) {
       // Request duoc gui nhung khong nhan duoc response
       error.message = 'Không nhận được phản hồi từ server.';
@@ -51,7 +76,8 @@ api.interceptors.response.use(
 // Test ket noi den server
 const testConnection = async () => {
   try {
-    const response = await axios.get(API_BASE_URL.replace('/api', '/health'));
+    const healthUrl = API_BASE_URL.replace('/api', '/health');
+    const response = await axios.get(healthUrl, { timeout: 5000 });
     return { success: true, data: response.data };
   } catch (error) {
     return { 
@@ -61,33 +87,6 @@ const testConnection = async () => {
     };
   }
 };
-
-// Add token to requests
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Handle 401 errors (unauthorized)
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/';
-    }
-    return Promise.reject(error);
-  }
-);
 
 // API Service
 export const caytrongAPI = {

@@ -39,8 +39,22 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Connection profile path
-const ccpPath = path.resolve('/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/connection-org1.json');
-const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
+const ccpPath = process.env.CCP_PATH || path.resolve('/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/connection-org1.json');
+
+// Load connection profile with error handling
+let ccp;
+try {
+    if (!fs.existsSync(ccpPath)) {
+        console.error(`❌ Connection profile not found at: ${ccpPath}`);
+        console.error('Please check if Hyperledger Fabric network is set up correctly.');
+        process.exit(1);
+    }
+    ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
+    console.log(`✅ Loaded connection profile from: ${ccpPath}`);
+} catch (error) {
+    console.error('❌ Error loading connection profile:', error.message);
+    process.exit(1);
+}
 
 // Wallet path
 const walletPath = path.join(process.cwd(), 'wallet');
@@ -287,6 +301,7 @@ app.patch('/api/caytrong/:maCay/nangsuat', authenticateToken, async (req, res) =
 
 // Register new user
 app.post('/api/auth/register', async (req, res) => {
+    let gateway;
     try {
         const { username, password, fullName, email, role } = req.body;
 
@@ -294,21 +309,50 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).json({ error: 'Thiếu thông tin bắt buộc' });
         }
 
+        console.log(`[REGISTER] Attempting to register user: ${username}`);
+
         const userName = process.env.USER_NAME || 'appUser';
-        const gateway = await getGateway(userName);
+        gateway = await getGateway(userName);
         const network = await gateway.getNetwork('mychannel');
         const contract = network.getContract('qlcaytrong');
 
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        console.log(`[REGISTER] Submitting transaction to blockchain...`);
         await contract.submitTransaction('createUser', username, hashedPassword, fullName, email, role || 'user');
-        await gateway.disconnect();
+        
+        if (gateway) {
+            await gateway.disconnect();
+        }
 
+        console.log(`[REGISTER] User ${username} registered successfully`);
         res.json({ success: true, message: 'Đăng ký thành công' });
     } catch (error) {
-        console.error(`Error registering user: ${error}`);
-        res.status(500).json({ error: error.message });
+        console.error(`[REGISTER] Error registering user:`, error);
+        
+        if (gateway) {
+            try {
+                await gateway.disconnect();
+            } catch (disconnectError) {
+                console.error(`[REGISTER] Error disconnecting gateway:`, disconnectError);
+            }
+        }
+
+        // Xử lý các lỗi cụ thể
+        let errorMessage = error.message || 'Đăng ký thất bại';
+        
+        if (errorMessage.includes('Peer endorsements do not match')) {
+            errorMessage = 'Lỗi blockchain: Chaincode chưa được deploy đúng hoặc network chưa chạy. Vui lòng kiểm tra lại.';
+        } else if (errorMessage.includes('chaincode') || errorMessage.includes('chaincode name')) {
+            errorMessage = 'Lỗi: Chaincode chưa được deploy. Chạy: cd /fabric-samples/test-network && ./network.sh deployCC -ccn qlcaytrong -ccp ../chaincode/qlcaytrong/javascript -ccl javascript';
+        } else if (errorMessage.includes('network') || errorMessage.includes('channel')) {
+            errorMessage = 'Lỗi: Network chưa được khởi động. Chạy: cd /fabric-samples/test-network && ./network.sh up';
+        } else if (errorMessage.includes('da ton tai')) {
+            errorMessage = `Tên đăng nhập "${username}" đã tồn tại. Vui lòng chọn tên khác.`;
+        }
+
+        res.status(500).json({ error: errorMessage });
     }
 });
 
@@ -327,8 +371,20 @@ app.post('/api/auth/login', async (req, res) => {
         const contract = network.getContract('qlcaytrong');
 
         // Get user from blockchain
-        const result = await contract.evaluateTransaction('getUser', username);
-        const user = JSON.parse(result.toString());
+        let user;
+        try {
+            const result = await contract.evaluateTransaction('getUser', username);
+            user = JSON.parse(result.toString());
+        } catch (error) {
+            await gateway.disconnect();
+            // Check if error is about user not existing
+            if (error.message && error.message.includes('khong ton tai')) {
+                return res.status(401).json({ 
+                    error: `Tên đăng nhập "${username}" không tồn tại. Vui lòng đăng ký tài khoản trước.` 
+                });
+            }
+            throw error;
+        }
         await gateway.disconnect();
 
         // Verify password

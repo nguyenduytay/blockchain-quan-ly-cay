@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Container, Card, Form, Button, Alert } from 'react-bootstrap';
-import { authAPI } from '../services/api';
+import { authAPI, testConnection } from '../services/api';
 import './Login.css';
 
 function Login({ onLogin }) {
@@ -10,21 +10,44 @@ function Login({ onLogin }) {
   });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [apiStatus, setApiStatus] = useState(null);
+
+  // Test API connection on mount
+  useEffect(() => {
+    const checkApi = async () => {
+      const result = await testConnection();
+      setApiStatus(result);
+    };
+    checkApi();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    e.stopPropagation();
     setError(null);
     setLoading(true);
 
     try {
+      console.log('Đang gửi request đăng nhập...');
       const response = await authAPI.login(formData.username, formData.password);
-      if (response.data.success) {
+      console.log('Response từ server:', response);
+      
+      if (response && response.data && response.data.success) {
+        // Lưu token và user vào localStorage
         localStorage.setItem('token', response.data.token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
+        
+        console.log('Đăng nhập thành công, token đã được lưu');
+        
+        // Gọi callback onLogin
         onLogin(response.data.user, response.data.token);
+      } else {
+        throw new Error('Phản hồi từ server không hợp lệ');
       }
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Đăng nhập thất bại');
+      console.error('Lỗi đăng nhập:', err);
+      const errorMessage = err.response?.data?.error || err.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin đăng nhập.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -40,9 +63,39 @@ function Login({ onLogin }) {
               <p className="login-subtitle">Hệ Thống Quản Lý Cây Trồng Blockchain</p>
             </div>
             
-            {error && <Alert variant="danger" className="mt-3">{error}</Alert>}
+            {apiStatus && !apiStatus.success && (
+              <Alert variant="warning" className="mt-3">
+                <strong>Cảnh báo:</strong> {apiStatus.error || 'Không thể kết nối đến API server. Vui lòng kiểm tra backend có đang chạy không.'}
+              </Alert>
+            )}
             
-            <Form onSubmit={handleSubmit} className="login-form">
+            {error && (
+              <Alert variant="danger" className="mt-3" dismissible onClose={() => setError(null)}>
+                <strong>Lỗi đăng nhập:</strong> {error}
+                {error.includes('không tồn tại') && (
+                  <div className="mt-3">
+                    <p className="mb-2"><strong>Giải pháp:</strong> Bạn cần tạo tài khoản trước.</p>
+                    <p className="mb-2">Chạy lệnh sau trên server (VMHyper):</p>
+                    <div className="bg-dark text-light p-3 rounded" style={{fontSize: '0.85rem'}}>
+                      <code style={{whiteSpace: 'pre-wrap', wordBreak: 'break-all'}}>
+{`curl -X POST http://192.168.80.10:3006/api/auth/register \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "username": "admin",
+    "password": "admin123",
+    "fullName": "Administrator",
+    "email": "admin@example.com",
+    "role": "admin"
+  }'`}
+                      </code>
+                    </div>
+                    <p className="mt-2 mb-0"><small>Sau khi tạo thành công, bạn có thể đăng nhập với username và password trên.</small></p>
+                  </div>
+                )}
+              </Alert>
+            )}
+            
+            <Form onSubmit={handleSubmit} className="login-form" noValidate>
               <Form.Group className="mb-3">
                 <Form.Label>Tên đăng nhập</Form.Label>
                 <Form.Control
@@ -78,6 +131,9 @@ function Login({ onLogin }) {
 
             <div className="login-footer">
               <p className="text-muted small">
+                Chưa có tài khoản? <a href="#" onClick={(e) => { e.preventDefault(); if (window.showRegister) window.showRegister(); }}>Đăng ký ngay</a>
+              </p>
+              <p className="text-muted small mt-2">
                 Powered by Hyperledger Fabric & React.js
               </p>
             </div>
