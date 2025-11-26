@@ -1,21 +1,6 @@
 # Hướng Dẫn Chi Tiết - Hệ Thống Quản Lý Cây Trồng Blockchain
 
-## 📋 Mục Lục
 
-1. [Tổng Quan](#tổng-quan)
-2. [Tính Năng](#tính-năng)
-3. [Công Nghệ Sử Dụng](#công-nghệ-sử-dụng)
-4. [Cấu Trúc Dự Án](#cấu-trúc-dự-án)
-5. [Chuẩn Bị Môi Trường](#chuẩn-bị-môi-trường)
-6. [Cài Đặt Chaincode](#cài-đặt-chaincode)
-7. [Cài Đặt Backend](#cài-đặt-backend)
-8. [Cài Đặt Frontend](#cài-đặt-frontend)
-9. [Sử Dụng Ứng Dụng](#sử-dụng-ứng-dụng)
-10. [API Endpoints](#api-endpoints)
-11. [Xử Lý Lỗi](#xử-lý-lỗi)
-12. [Tùy Chỉnh](#tùy-chỉnh)
-
----
 
 ## 📖 Tổng Quan
 
@@ -241,9 +226,8 @@ npm install
 ```
 
 **Nếu gặp cảnh báo về phiên bản Node.js:**
-- Nếu dùng Node.js 16.x: Package.json đã được cấu hình để dùng fabric-contract-api@~2.2.0 (tương thích với Node.js 16)
-- Nếu dùng Node.js 18.x trở lên: Có thể dùng phiên bản mới nhất
-
+- nvm install 18
+- nvm install 12
 Kiểm tra cài đặt:
 
 ```bash
@@ -254,14 +238,18 @@ npm list fabric-contract-api fabric-shim
 
 ```bash
 cd /fabric-samples/test-network
+# khởi động lại docker
+sudo systemctl restart docker
 
-# Dừng network cũ (nếu có)
+# Dừng network nếu đang chạy
 ./network.sh down
 
-# Khởi động network
-./network.sh up createChannel
-```
+# Khởi động network với CA
+./network.sh up createChannel -c
 
+# Tạo channel
+./network.sh createChannel
+```
 **Phải thấy:**
 ```
 Creating channel 'mychannel'...
@@ -269,6 +257,14 @@ Channel 'mychannel' created
 ```
 
 ### 1.5. Package và Deploy Chaincode
+# copy các file từ thư mục `chaincode/javascript/` của dự án:
+
+- `qlcaytrong.js`
+- `index.js`
+- `package.json`
+
+# cài đặt môi trường
+npm install
 
 ```bash
 cd /fabric-samples/test-network
@@ -456,17 +452,6 @@ PORT=3000
 ```bash
 npm start
 ```
-
-**Phải thấy:**
-```
-Compiled successfully!
-
-You can now view qlcaytrong-react-app in the browser.
-
-  Local:            http://localhost:3000
-  On Your Network:  http://192.168.80.10:3000
-```
-
 Frontend sẽ chạy trên port **3000** (mặc định).
 
 Truy cập ứng dụng tại: `http://localhost:3000` hoặc `http://192.168.80.10:3000`
@@ -504,6 +489,8 @@ curl -X POST http://localhost:3006/api/auth/register \
     "email": "admin@example.com",
     "role": "admin"
   }'
+
+curl -X POST http://192.168.80.10:3006/api/auth/register -H "Content-Type: application/json" -d "{\"username\":\"admin\",\"password\":\"admin123\",\"fullName\":\"Administrator\",\"email\":\"admin@example.com\",\"role\":\"admin\"}"
 ```
 
 **Nếu thành công sẽ thấy:**
@@ -975,312 +962,17 @@ ls -la wallet/
 # Phải thấy: admin/ và appUser/
 ```
 
-### Lỗi: "Cannot connect to Fabric network"
-
-**Nguyên nhân:** Fabric network chưa chạy hoặc chaincode chưa được deploy
-
-**Giải pháp:**
-```bash
-cd /fabric-samples/test-network
-
-# Kiểm tra network
-docker ps | grep peer
-
-# Nếu không thấy, khởi động lại
-./network.sh down
-./network.sh up createChannel
-
-# Deploy chaincode
-./network.sh deployCC -ccn qlcaytrong -ccp ../chaincode/qlcaytrong/javascript -ccl javascript
-```
-
-### Lỗi: "DiscoveryService: mychannel error: access denied"
-
-**Nguyên nhân:** User không có quyền truy cập channel hoặc discovery service lỗi
-
-**Giải pháp 1: Re-enroll User**
-```bash
-cd ~/backend
-rm -rf wallet
-npm run enrollAdmin
-npm run registerUser
-npm start
-```
-
-**Giải pháp 2: Tắt Discovery Service**
-```bash
-cd ~/backend
-echo "DISCOVERY_ENABLED=false" > .env
-npm start
-```
-
-### Lỗi: "Peer endorsements do not match"
-
-**Nguyên nhân:** Chaincode chưa được deploy đúng hoặc network chưa chạy
-
-**Giải pháp:**
-```bash
-cd /fabric-samples/test-network
-./network.sh down
-./network.sh up createChannel
-./network.sh deployCC -ccn qlcaytrong -ccp ../chaincode/qlcaytrong/javascript -ccl javascript
-```
-
-### Lỗi: "Token không hợp lệ"
-
-**Nguyên nhân:** Token đã hết hạn hoặc không hợp lệ
-
-**Giải pháp:** Đăng xuất và đăng nhập lại
-
-### Lỗi: "Chỉ admin mới có quyền truy cập"
-
-**Nguyên nhân:** Bạn đang đăng nhập với tài khoản user thường
-
-**Giải pháp:** 
-- Đăng nhập với tài khoản admin
-- Hoặc yêu cầu admin cấp quyền admin cho tài khoản của bạn
-
-### Lỗi: "Port already in use"
-
-**Nguyên nhân:** Port đã được sử dụng bởi ứng dụng khác
-
-**Giải pháp Backend:**
-- Thay đổi port trong `server.js` hoặc `.env`:
-```bash
-PORT=3007 npm start
-```
-
-**Giải pháp Frontend:**
-- Tạo file `.env`:
-```bash
-PORT=3001
-```
-
-### Lỗi: "CORS error" trong Frontend
-
-**Nguyên nhân:** Backend không cho phép CORS từ frontend
-
-**Giải pháp:** Đảm bảo `cors` đã được cài đặt và cấu hình trong `server.js`:
-```javascript
-app.use(cors());
-```
-
-### Lỗi: "Connection profile not found"
-
-**Nguyên nhân:** Đường dẫn connection profile không đúng
-
-**Giải pháp:**
-1. Kiểm tra đường dẫn trong `server.js`
-2. Hoặc set environment variable:
-```bash
-export CCP_PATH=/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/connection-org1.json
-```
-
-### Lỗi: "User đã tồn tại" khi đăng ký
-
-**Nguyên nhân:** Username đã được sử dụng
-
-**Giải pháp:** Chọn username khác
-
-### Lỗi: "Sai mật khẩu"
-
-**Nguyên nhân:** Mật khẩu không đúng
-
-**Giải pháp:** Kiểm tra lại username và password
-
----
-
-## 🎛️ Tùy Chỉnh
-
-### Thay Đổi Port Backend
-
-**Cách 1: Environment Variable**
-
-Tạo file `.env` trong `backend/`:
-```bash
-PORT=3007
-```
-
-**Cách 2: Sửa trong code**
-
-Sửa trong `backend/server.js`:
-```javascript
-const PORT = process.env.PORT || 3007; // Thay đổi số port
-```
-
-### Thay Đổi Port Frontend
-
-Tạo file `.env` trong `frontend/`:
-```bash
-PORT=3001
-```
-
-Hoặc sửa trong `package.json`:
-```json
-"scripts": {
-  "start": "PORT=3001 react-scripts start"
-}
-```
-
-### Thay Đổi JWT Secret
-
-Tạo file `.env` trong `backend/`:
-```bash
-JWT_SECRET=your-very-secure-secret-key-here
-```
-
-**Lưu ý:** Trong production, phải dùng secret key mạnh và bảo mật!
-
-### Thay Đổi Connection Profile Path
-
-Tạo file `.env` trong `backend/`:
-```bash
-CCP_PATH=/custom/path/to/connection-org1.json
-```
-
-### Thay Đổi User Name
-
-Tạo file `.env` trong `backend/`:
-```bash
-USER_NAME=myCustomUser
-```
-
-Sau đó register user mới với tên đó:
-```bash
-# Sửa USER_NAME trong registerUser.js
-npm run registerUser
-```
-
-### Tắt Discovery Service
-
-Tạo file `.env` trong `backend/`:
-```bash
-DISCOVERY_ENABLED=false
-```
-
-### Thay Đổi API URL trong Frontend
-
-Tạo file `.env` trong `frontend/`:
-```bash
-REACT_APP_API_URL=http://your-server-ip:3006/api
-```
-
-**Lưu ý:** Phải restart frontend sau khi thay đổi `.env`
-
----
-
-## 📊 Kiểm Tra Hệ Thống
-
-### Checklist Trước Khi Sử Dụng
-
-- [ ] Network đã được khởi động (`docker ps | grep peer`)
-- [ ] Chaincode đã được deploy (`docker ps | grep chaincode`)
-- [ ] Backend đang chạy (`curl http://localhost:3006/health`)
-- [ ] Frontend đang chạy (`http://localhost:3000` có thể truy cập)
-- [ ] Wallet có admin và appUser (`ls ~/backend/wallet/`)
-- [ ] Đã tạo tài khoản đầu tiên (qua API hoặc web)
-
-### Kiểm Tra Logs
-
-**Backend logs:**
-```bash
-cd ~/backend
-npm start
-# Xem output trong terminal
-```
-
-**Frontend logs:**
-- Mở Developer Tools (F12) trong trình duyệt
-- Tab Console để xem JavaScript logs
-- Tab Network để xem API calls
-
-**Chaincode logs:**
-```bash
-docker logs $(docker ps | grep chaincode | awk '{print $1}' | head -1)
-```
-
-**Peer logs:**
-```bash
-docker logs peer0.org1.example.com
-```
-
----
-
-## 🔒 Bảo Mật
-
-### Best Practices
-
-1. **JWT Secret:**
-   - Không commit secret key vào git
-   - Dùng environment variable
-   - Dùng secret key mạnh trong production
-
-2. **Password:**
-   - Password được hash bằng bcrypt (10 rounds)
-   - Không lưu plain text password
-
-3. **Authentication:**
-   - Tất cả API quan trọng yêu cầu JWT token
-   - Token có thời hạn 24 giờ
-
-4. **Authorization:**
-   - Role-based access control
-   - Admin có quyền cao hơn user
-
-5. **Blockchain:**
-   - Dữ liệu được lưu trên blockchain, không thể thay đổi
-   - Mọi transaction đều được ghi lại
-
----
-
-## 📝 Tài Liệu Tham Khảo
-
-- [Hyperledger Fabric Documentation](https://hyperledger-fabric.readthedocs.io/)
-- [Fabric Contract API](https://hyperledger.github.io/fabric-chaincode-node/)
-- [React Documentation](https://react.dev/)
-- [Express.js Documentation](https://expressjs.com/)
-- [JWT Authentication](https://jwt.io/)
-- [Bootstrap Documentation](https://getbootstrap.com/)
-
----
-
-## 🆘 Hỗ Trợ
-
-Nếu gặp vấn đề, vui lòng kiểm tra:
-
-1. **Logs của Backend Server** - Xem terminal nơi chạy `npm start`
-2. **Logs của Frontend** - Console trong trình duyệt (F12)
-3. **Logs của Chaincode** - Docker containers
-4. **Logs của Network** - Docker containers của peers
-5. **Đảm bảo tất cả services đang chạy:**
-   - Network (peers, orderer, CA)
-   - Chaincode containers
-   - Backend server
-   - Frontend server
-6. **Kiểm tra token JWT có hợp lệ không**
-7. **Kiểm tra wallet có identity không**
-
-### Liên Hệ
-
-Nếu vẫn không giải quyết được, hãy cung cấp:
-- Thông báo lỗi đầy đủ
-- Logs từ backend và frontend
-- Môi trường đang sử dụng (OS, Node.js version, etc.)
-
----
-
-## 🎉 Kết Luận
-
-Hệ thống Quản Lý Cây Trồng Blockchain đã được thiết kế với:
-- ✅ Giao diện chuyên nghiệp và hiện đại
-- ✅ Tính năng đầy đủ (CRUD, Authentication, Reports)
-- ✅ Bảo mật cao (JWT, Password hashing, Blockchain)
-- ✅ Dễ sử dụng và triển khai
-- ✅ Tài liệu chi tiết
-
-**Chúc bạn triển khai và sử dụng thành công! 🚀**
-
----
-
-**Made with ❤️ using Hyperledger Fabric & React**
-
+# Lỗi CLI Container
+docker exec -it cli bash
+
+export CORE_PEER_TLS_ENABLED=true
+export CORE_PEER_LOCALMSPID=Org1MSP
+export CORE_PEER_MSPCONFIGPATH=/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
+export CORE_PEER_TLS_ROOTCERT_FILE=/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
+
+# kiểm tra lại 
+ls $CORE_PEER_MSPCONFIGPATH
+
+# chay lại query chaincode 
+peer lifecycle chaincode querycommitted -C mychannel

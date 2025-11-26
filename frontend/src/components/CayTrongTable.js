@@ -34,7 +34,9 @@ function CayTrongTable() {
       }
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching cay trong:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching cay trong:', err.message || 'Failed to fetch data');
+      }
     } finally {
       setLoading(false);
     }

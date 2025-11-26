@@ -28,16 +28,12 @@ function Login({ onLogin }) {
     setLoading(true);
 
     try {
-      console.log('Đang gửi request đăng nhập...');
       const response = await authAPI.login(formData.username, formData.password);
-      console.log('Response từ server:', response);
       
       if (response && response.data && response.data.success) {
         // Lưu token và user vào localStorage
         localStorage.setItem('token', response.data.token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
-        
-        console.log('Đăng nhập thành công, token đã được lưu');
         
         // Gọi callback onLogin
         onLogin(response.data.user, response.data.token);
@@ -45,7 +41,10 @@ function Login({ onLogin }) {
         throw new Error('Phản hồi từ server không hợp lệ');
       }
     } catch (err) {
-      console.error('Lỗi đăng nhập:', err);
+      // Chỉ log error message, không log toàn bộ error object
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Lỗi đăng nhập:', err.message || 'Đăng nhập thất bại');
+      }
       const errorMessage = err.response?.data?.error || err.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin đăng nhập.';
       setError(errorMessage);
     } finally {

@@ -26,7 +26,9 @@ function UserManagement({ currentUser }) {
       }
     } catch (err) {
       setError(err.response?.data?.error || err.message);
-      console.error('Error fetching users:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching users:', err.message || 'Failed to fetch users');
+      }
     } finally {
       setLoading(false);
     }

@@ -18,7 +18,9 @@ function ReportPage() {
       }
     } catch (err) {
       setError(err.response?.data?.error || err.message);
-      console.error('Error generating report:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error generating report:', err.message || 'Failed to generate report');
+      }
     } finally {
       setLoading(false);
     }

@@ -46,14 +46,14 @@ function App() {
 
   // Các hàm handler
   const handleLogin = (userData, tokenData) => {
-    console.log('handleLogin được gọi với:', { userData, tokenData });
     if (userData && tokenData) {
       setUser(userData);
       setToken(tokenData);
       setActiveTab('home');
-      console.log('Đã cập nhật state user và token');
     } else {
-      console.error('handleLogin: userData hoặc tokenData không hợp lệ');
+      if (process.env.NODE_ENV === 'development') {
+        console.error('handleLogin: userData hoặc tokenData không hợp lệ');
+      }
     }
   };
 

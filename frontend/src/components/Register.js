@@ -37,7 +37,6 @@ function Register({ onRegisterSuccess }) {
     }
 
     try {
-      console.log('Đang gửi request đăng ký...');
       const response = await authAPI.register({
         username: formData.username,
         password: formData.password,
@@ -45,8 +44,6 @@ function Register({ onRegisterSuccess }) {
         email: formData.email,
         role: formData.role
       });
-      
-      console.log('Response từ server:', response);
       
       if (response && response.data && response.data.success) {
         setSuccess('Đăng ký thành công! Bạn có thể đăng nhập ngay bây giờ.');
@@ -70,7 +67,10 @@ function Register({ onRegisterSuccess }) {
         throw new Error('Phản hồi từ server không hợp lệ');
       }
     } catch (err) {
-      console.error('Lỗi đăng ký:', err);
+      // Chỉ log error message, không log toàn bộ error object
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Lỗi đăng ký:', err.message || 'Đăng ký thất bại');
+      }
       let errorMessage = err.response?.data?.error || err.message || 'Đăng ký thất bại. Vui lòng thử lại.';
       
       // Xử lý các lỗi cụ thể

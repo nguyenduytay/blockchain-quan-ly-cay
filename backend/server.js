@@ -309,8 +309,6 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).json({ error: 'Thiếu thông tin bắt buộc' });
         }
 
-        console.log(`[REGISTER] Attempting to register user: ${username}`);
-
         const userName = process.env.USER_NAME || 'appUser';
         gateway = await getGateway(userName);
         const network = await gateway.getNetwork('mychannel');
@@ -319,23 +317,20 @@ app.post('/api/auth/register', async (req, res) => {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        console.log(`[REGISTER] Submitting transaction to blockchain...`);
         await contract.submitTransaction('createUser', username, hashedPassword, fullName, email, role || 'user');
         
         if (gateway) {
             await gateway.disconnect();
         }
-
-        console.log(`[REGISTER] User ${username} registered successfully`);
         res.json({ success: true, message: 'Đăng ký thành công' });
     } catch (error) {
-        console.error(`[REGISTER] Error registering user:`, error);
+        console.error(`[REGISTER] Error registering user:`, error.message || 'Registration failed');
         
         if (gateway) {
             try {
                 await gateway.disconnect();
             } catch (disconnectError) {
-                console.error(`[REGISTER] Error disconnecting gateway:`, disconnectError);
+                console.error(`[REGISTER] Error disconnecting gateway:`, disconnectError.message || 'Disconnect failed');
             }
         }
 
@@ -422,7 +417,7 @@ app.post('/api/auth/login', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error(`Error logging in: ${error}`);
+        console.error(`Error logging in: ${error.message || 'Login failed'}`);
         res.status(401).json({ error: error.message });
     }
 });

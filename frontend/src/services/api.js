@@ -20,7 +20,7 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // Log request (chỉ trong development)
+    // Log request (chỉ trong development, không log token)
     if (process.env.NODE_ENV === 'development') {
       console.log(`🔄 API Call: ${config.method?.toUpperCase()} ${config.url}`);
     }
@@ -28,7 +28,10 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error('❌ Request Error:', error);
+    // Chỉ log error message, không log toàn bộ error object
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Request Error:', error.message || 'Request failed');
+    }
     return Promise.reject(error);
   }
 );
@@ -43,7 +46,12 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    console.error('❌ API Error:', error);
+    // Chỉ log error message và status, không log toàn bộ error object
+    if (process.env.NODE_ENV === 'development') {
+      const status = error.response?.status || 'N/A';
+      const url = error.config?.url || 'unknown';
+      console.error(`❌ API Error: ${status} ${url} - ${error.message || 'Request failed'}`);
+    }
     
     // Handle 401/403 errors - Unauthorized
     if (error.response?.status === 401 || error.response?.status === 403) {
