@@ -8,37 +8,70 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 seconds timeout
+  timeout: 30000, // 30 seconds timeout
 });
 
-// Request interceptor de log requests
+// Request interceptor - Add token và log requests
 api.interceptors.request.use(
   (config) => {
-    console.log(`🔄 API Call: ${config.method?.toUpperCase()} ${config.url}`);
+    // Add token to requests
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    
+    // Log request (chỉ trong development, không log token)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🔄 API Call: ${config.method?.toUpperCase()} ${config.url}`);
+    }
+    
     return config;
   },
   (error) => {
-    console.error('❌ Request Error:', error);
+    // Chỉ log error message, không log toàn bộ error object
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Request Error:', error.message || 'Request failed');
+    }
     return Promise.reject(error);
   }
 );
 
-// Response interceptor de xu ly loi
+// Response interceptor - Handle responses và errors
 api.interceptors.response.use(
   (response) => {
-    console.log(`✅ API Success: ${response.status} ${response.config.url}`);
+    // Log success (chỉ trong development)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`✅ API Success: ${response.status} ${response.config.url}`);
+    }
     return response;
   },
   (error) => {
-    console.error('❌ API Error:', error);
+    // Chỉ log error message và status, không log toàn bộ error object
+    if (process.env.NODE_ENV === 'development') {
+      const status = error.response?.status || 'N/A';
+      const url = error.config?.url || 'unknown';
+      console.error(`❌ API Error: ${status} ${url} - ${error.message || 'Request failed'}`);
+    }
     
+    // Handle 401/403 errors - Unauthorized
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      // Chỉ redirect nếu không phải đang ở trang login
+      if (!window.location.pathname.includes('/login') && !window.location.pathname === '/') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        // Không redirect ngay, để component tự xử lý
+      }
+    }
+    
+    // Format error message
     if (error.code === 'ECONNREFUSED') {
       error.message = 'Không thể kết nối đến server. Kiểm tra xem API server có đang chạy không?';
-    } else if (error.message.includes('Network Error')) {
+    } else if (error.message.includes('Network Error') || error.code === 'ERR_NETWORK') {
       error.message = 'Lỗi kết nối mạng. Kiểm tra kết nối internet và server.';
     } else if (error.response) {
       // Server tra ve loi HTTP
-      error.message = `Server error: ${error.response.status} - ${error.response.data?.error || error.response.statusText}`;
+      const errorMsg = error.response.data?.error || error.response.data?.message || error.response.statusText;
+      error.message = errorMsg;
     } else if (error.request) {
       // Request duoc gui nhung khong nhan duoc response
       error.message = 'Không nhận được phản hồi từ server.';
@@ -51,7 +84,8 @@ api.interceptors.response.use(
 // Test ket noi den server
 const testConnection = async () => {
   try {
-    const response = await axios.get(API_BASE_URL.replace('/api', '/health'));
+    const healthUrl = API_BASE_URL.replace('/api', '/health');
+    const response = await axios.get(healthUrl, { timeout: 5000 });
     return { success: true, data: response.data };
   } catch (error) {
     return { 
@@ -88,7 +122,7 @@ export const hosocanboAPI = {
   // Tim ho so can bo theo chuc vu
   getHoSoCanBoByChucVu: (chucVu) => api.get(`/hosocanbo/chucvu/${chucVu}`),
   
-  // Thay doi chuc vu can bo
+  // Thay doi chuc vu
   changeChucVu: (maCanBo, chucVuMoi) => api.patch(`/hosocanbo/${maCanBo}/thaydoichucvu`, { chucVuMoi }),
   
   // Cap nhat luong
@@ -98,6 +132,25 @@ export const hosocanboAPI = {
   testConnection: testConnection
 };
 
+// Authentication API
+export const authAPI = {
+  login: (username, password) => api.post('/auth/login', { username, password }),
+  register: (data) => api.post('/auth/register', data),
+  getMe: () => api.get('/auth/me')
+};
+
+// User Management API
+export const userAPI = {
+  getAllUsers: () => api.get('/users'),
+  getUser: (username) => api.get(`/users/${username}`),
+  updateUser: (username, data) => api.put(`/users/${username}`, data),
+  deleteUser: (username) => api.delete(`/users/${username}`)
+};
+
+// Report API
+export const reportAPI = {
+  getReport: () => api.get('/reports')
+};
+
 export { testConnection };
 export default api;
-

@@ -36,7 +36,9 @@ function HoSoCanBoTable() {
       }
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching ho so can bo:', err);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching ho so can bo:', err.message || 'Failed to fetch data');
+      }
     } finally {
       setLoading(false);
     }
