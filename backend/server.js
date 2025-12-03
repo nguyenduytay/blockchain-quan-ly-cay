@@ -11,6 +11,12 @@ const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const XLSX = require('xlsx');
+const PDFDocument = require('pdfkit');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
+const cron = require('node-cron');
 
 const app = express();
 const PORT = process.env.PORT || 3006;
@@ -37,6 +43,48 @@ const authenticateToken = (req, res, next) => {
         next();
     });
 };
+
+// Role-based authorization middleware
+const authorize = (...roles) => {
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Chưa đăng nhập' });
+        }
+        if (!roles.includes(req.user.role)) {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+        next();
+    };
+};
+
+// Guest access (optional authentication)
+const optionalAuth = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (token) {
+        jwt.verify(token, JWT_SECRET, (err, user) => {
+            if (!err) {
+                req.user = user;
+            }
+        });
+    }
+    next();
+};
+
+// Email configuration (cần cấu hình trong .env)
+const emailTransporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: process.env.SMTP_PORT || 587,
+    secure: false,
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+    }
+});
+
+// Multer configuration for file upload
+const upload = multer({ dest: 'uploads/' });
 
 // Connection profile path
 const ccpPath = process.env.CCP_PATH || path.resolve('/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/connection-org1.json');
@@ -445,12 +493,8 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 // ============ USER MANAGEMENT ENDPOINTS ============
 
 // Get all users
-app.get('/api/users', authenticateToken, async (req, res) => {
+app.get('/api/users', authenticateToken, authorize('admin', 'manager'), async (req, res) => {
     try {
-        // Only admin can access
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Chỉ admin mới có quyền truy cập' });
-        }
 
         const userName = process.env.USER_NAME || 'appUser';
         const gateway = await getGateway(userName);
@@ -521,12 +565,8 @@ app.put('/api/users/:username', authenticateToken, async (req, res) => {
 });
 
 // Delete user
-app.delete('/api/users/:username', authenticateToken, async (req, res) => {
+app.delete('/api/users/:username', authenticateToken, authorize('admin'), async (req, res) => {
     try {
-        // Only admin can delete users
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Chỉ admin mới có quyền xóa user' });
-        }
 
         const userName = process.env.USER_NAME || 'appUser';
         const gateway = await getGateway(userName);
@@ -616,6 +656,452 @@ app.get('/api/reports', authenticateToken, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+// ============ SEARCH & FILTER ENDPOINTS ============
+
+// Search cay trong (full-text)
+app.get('/api/caytrong/search', optionalAuth, async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q) {
+            return res.status(400).json({ error: 'Thiếu từ khóa tìm kiếm' });
+        }
+
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlcaytrong');
+
+        const result = await contract.evaluateTransaction('searchCayTrong', q);
+        await gateway.disconnect();
+
+        const caytrongs = JSON.parse(result.toString());
+        res.json({ success: true, data: caytrongs });
+    } catch (error) {
+        console.error(`Error searching cay trong: ${error}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Filter cay trong (multiple criteria)
+app.get('/api/caytrong/filter', optionalAuth, async (req, res) => {
+    try {
+        const { loaiCay, giaiDoan, viTri } = req.query;
+
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlcaytrong');
+
+        const result = await contract.evaluateTransaction('filterCayTrong', 
+            loaiCay || '', 
+            giaiDoan || '', 
+            viTri || ''
+        );
+        await gateway.disconnect();
+
+        const caytrongs = JSON.parse(result.toString());
+        res.json({ success: true, data: caytrongs });
+    } catch (error) {
+        console.error(`Error filtering cay trong: ${error}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============ RESET PASSWORD ENDPOINTS ============
+
+// Forgot password - Send reset email
+app.post('/api/auth/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({ error: 'Thiếu email' });
+        }
+
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlcaytrong');
+
+        // Find user by email
+        const allUsers = JSON.parse(await contract.evaluateTransaction('getAllUsers'));
+        const user = allUsers.find(u => u.Record.email === email);
+        
+        if (!user) {
+            await gateway.disconnect();
+            return res.status(404).json({ error: 'Email không tồn tại trong hệ thống' });
+        }
+
+        // Generate reset token
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 3600000).toISOString(); // 1 hour
+
+        await contract.submitTransaction('createResetToken', user.Record.username, resetToken, expiresAt);
+        await gateway.disconnect();
+
+        // Send email (if configured)
+        if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+            const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+            await emailTransporter.sendMail({
+                from: process.env.SMTP_USER,
+                to: email,
+                subject: 'Đặt lại mật khẩu - QLCayTrong',
+                html: `
+                    <h2>Đặt lại mật khẩu</h2>
+                    <p>Bạn đã yêu cầu đặt lại mật khẩu. Vui lòng click vào link sau:</p>
+                    <a href="${resetUrl}">${resetUrl}</a>
+                    <p>Link này sẽ hết hạn sau 1 giờ.</p>
+                `
+            });
+        }
+
+        res.json({ 
+            success: true, 
+            message: 'Email đặt lại mật khẩu đã được gửi',
+            token: resetToken // Trong production, không nên trả về token
+        });
+    } catch (error) {
+        console.error(`Error in forgot password: ${error}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Reset password with token
+app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+        if (!token || !newPassword) {
+            return res.status(400).json({ error: 'Thiếu token hoặc mật khẩu mới' });
+        }
+
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlcaytrong');
+
+        // Get token
+        const tokenData = JSON.parse(await contract.evaluateTransaction('getResetToken', token));
+        
+        // Check if token is expired or used
+        if (new Date(tokenData.expiresAt) < new Date()) {
+            await gateway.disconnect();
+            return res.status(400).json({ error: 'Token đã hết hạn' });
+        }
+        if (tokenData.used) {
+            await gateway.disconnect();
+            return res.status(400).json({ error: 'Token đã được sử dụng' });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update password
+        await contract.submitTransaction('updateUserPassword', tokenData.username, hashedPassword);
+        
+        // Mark token as used
+        await contract.submitTransaction('markResetTokenUsed', token);
+        await gateway.disconnect();
+
+        res.json({ success: true, message: 'Đặt lại mật khẩu thành công' });
+    } catch (error) {
+        console.error(`Error resetting password: ${error}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Change password (when logged in)
+app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ error: 'Thiếu mật khẩu hiện tại hoặc mật khẩu mới' });
+        }
+
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlcaytrong');
+
+        // Verify current password
+        const userResult = await contract.evaluateTransaction('getUser', req.user.username);
+        const user = JSON.parse(userResult.toString());
+        
+        const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+        if (!isValidPassword) {
+            await gateway.disconnect();
+            return res.status(401).json({ error: 'Mật khẩu hiện tại không đúng' });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await contract.submitTransaction('updateUserPassword', req.user.username, hashedPassword);
+        await gateway.disconnect();
+
+        res.json({ success: true, message: 'Đổi mật khẩu thành công' });
+    } catch (error) {
+        console.error(`Error changing password: ${error}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============ IMPORT/EXPORT ENDPOINTS ============
+
+// Export to Excel
+app.get('/api/caytrong/export/excel', authenticateToken, async (req, res) => {
+    try {
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlcaytrong');
+
+        const result = await contract.evaluateTransaction('queryAllCayTrong');
+        const allCayTrong = JSON.parse(result.toString());
+        await gateway.disconnect();
+
+        // Prepare data for Excel
+        const data = allCayTrong.map(item => ({
+            'Mã cây': item.Record.maCay,
+            'Tên cây': item.Record.tenCay,
+            'Loại cây': item.Record.loaiCay,
+            'Ngày trồng': item.Record.ngayTrong,
+            'Giai đoạn': item.Record.giaiDoan,
+            'Năng suất (tấn/ha)': item.Record.nangSuat,
+            'Diện tích (ha)': item.Record.dienTich,
+            'Vị trí': item.Record.viTri
+        }));
+
+        const workbook = XLSX.utils.book_new();
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Cây Trồng');
+        
+        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+        
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=cay-trong-${new Date().toISOString().split('T')[0]}.xlsx`);
+        res.send(buffer);
+    } catch (error) {
+        console.error(`Error exporting to Excel: ${error}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Export to PDF
+app.get('/api/caytrong/export/pdf', authenticateToken, async (req, res) => {
+    try {
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlcaytrong');
+
+        const result = await contract.evaluateTransaction('queryAllCayTrong');
+        const allCayTrong = JSON.parse(result.toString());
+        await gateway.disconnect();
+
+        const doc = new PDFDocument();
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=cay-trong-${new Date().toISOString().split('T')[0]}.pdf`);
+        
+        doc.pipe(res);
+        doc.fontSize(20).text('Báo Cáo Cây Trồng', { align: 'center' });
+        doc.moveDown();
+        doc.fontSize(12).text(`Ngày xuất: ${new Date().toLocaleString('vi-VN')}`, { align: 'center' });
+        doc.moveDown(2);
+
+        allCayTrong.forEach((item, index) => {
+            const record = item.Record;
+            doc.fontSize(14).text(`${index + 1}. ${record.tenCay} (${record.maCay})`, { underline: true });
+            doc.fontSize(10);
+            doc.text(`   Loại: ${record.loaiCay}`);
+            doc.text(`   Giai đoạn: ${record.giaiDoan}`);
+            doc.text(`   Năng suất: ${record.nangSuat} tấn/ha`);
+            doc.text(`   Diện tích: ${record.dienTich} ha`);
+            doc.text(`   Vị trí: ${record.viTri}`);
+            doc.moveDown();
+        });
+
+        doc.end();
+    } catch (error) {
+        console.error(`Error exporting to PDF: ${error}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Import from Excel/CSV
+app.post('/api/caytrong/import', authenticateToken, authorize('admin', 'manager'), upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Không có file được upload' });
+        }
+
+        const workbook = XLSX.readFile(req.file.path);
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(worksheet);
+
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlcaytrong');
+
+        const results = { success: [], errors: [] };
+
+        for (const row of data) {
+            try {
+                await contract.submitTransaction(
+                    'createCayTrong',
+                    row['Mã cây'] || row.maCay,
+                    row['Tên cây'] || row.tenCay,
+                    row['Loại cây'] || row.loaiCay,
+                    row['Ngày trồng'] || row.ngayTrong,
+                    row['Giai đoạn'] || row.giaiDoan,
+                    (row['Năng suất (tấn/ha)'] || row.nangSuat || 0).toString(),
+                    (row['Diện tích (ha)'] || row.dienTich || 0).toString(),
+                    row['Vị trí'] || row.viTri
+                );
+                results.success.push(row['Mã cây'] || row.maCay);
+            } catch (error) {
+                results.errors.push({
+                    row: row['Mã cây'] || row.maCay,
+                    error: error.message
+                });
+            }
+        }
+
+        await gateway.disconnect();
+        
+        // Delete uploaded file
+        fs.unlinkSync(req.file.path);
+
+        res.json({
+            success: true,
+            message: `Import thành công ${results.success.length} bản ghi, ${results.errors.length} lỗi`,
+            results
+        });
+    } catch (error) {
+        console.error(`Error importing: ${error}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============ REPORT HISTORY ENDPOINTS ============
+
+// Save report
+app.post('/api/reports', authenticateToken, async (req, res) => {
+    try {
+        const reportId = `RPT_${Date.now()}_${req.user.username}`;
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlcaytrong');
+
+        // Get all cay trong for report
+        const result = await contract.evaluateTransaction('queryAllCayTrong');
+        const allCayTrong = JSON.parse(result.toString());
+
+        // Calculate statistics (same as GET /api/reports)
+        const stats = {
+            totalCayTrong: allCayTrong.length,
+            totalDienTich: allCayTrong.reduce((sum, item) => sum + parseFloat(item.Record.dienTich || 0), 0),
+            avgNangSuat: allCayTrong.length > 0 
+                ? allCayTrong.reduce((sum, item) => sum + parseFloat(item.Record.nangSuat || 0), 0) / allCayTrong.length 
+                : 0,
+            byLoaiCay: {},
+            byGiaiDoan: {},
+            byViTri: {}
+        };
+
+        allCayTrong.forEach(item => {
+            const loai = item.Record.loaiCay;
+            if (!stats.byLoaiCay[loai]) {
+                stats.byLoaiCay[loai] = { count: 0, dienTich: 0 };
+            }
+            stats.byLoaiCay[loai].count++;
+            stats.byLoaiCay[loai].dienTich += parseFloat(item.Record.dienTich || 0);
+        });
+
+        allCayTrong.forEach(item => {
+            const giaiDoan = item.Record.giaiDoan;
+            if (!stats.byGiaiDoan[giaiDoan]) {
+                stats.byGiaiDoan[giaiDoan] = 0;
+            }
+            stats.byGiaiDoan[giaiDoan]++;
+        });
+
+        allCayTrong.forEach(item => {
+            const viTri = item.Record.viTri;
+            if (!stats.byViTri[viTri]) {
+                stats.byViTri[viTri] = 0;
+            }
+            stats.byViTri[viTri]++;
+        });
+
+        const reportData = {
+            generatedAt: new Date().toISOString(),
+            generatedBy: req.user.username,
+            statistics: stats,
+            data: allCayTrong
+        };
+
+        await contract.submitTransaction('saveReport', reportId, JSON.stringify(reportData));
+        await gateway.disconnect();
+
+        res.json({ success: true, reportId, report: reportData });
+    } catch (error) {
+        console.error(`Error saving report: ${error}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get report history
+app.get('/api/reports/history', authenticateToken, async (req, res) => {
+    try {
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlcaytrong');
+
+        const result = await contract.evaluateTransaction('getAllReports');
+        const reports = JSON.parse(result.toString());
+        await gateway.disconnect();
+
+        res.json({ success: true, data: reports });
+    } catch (error) {
+        console.error(`Error getting report history: ${error}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get specific report
+app.get('/api/reports/:reportId', authenticateToken, async (req, res) => {
+    try {
+        const { reportId } = req.params;
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlcaytrong');
+
+        const result = await contract.evaluateTransaction('getReport', reportId);
+        const report = JSON.parse(result.toString());
+        await gateway.disconnect();
+
+        res.json({ success: true, data: report });
+    } catch (error) {
+        console.error(`Error getting report: ${error}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Scheduled report generation (daily at midnight)
+if (process.env.ENABLE_SCHEDULED_REPORTS === 'true') {
+    cron.schedule('0 0 * * *', async () => {
+        try {
+            console.log('Generating daily report...');
+            // Implementation for scheduled reports
+        } catch (error) {
+            console.error('Error generating scheduled report:', error);
+        }
+    });
+}
 
 // Start server
 app.listen(PORT, () => {

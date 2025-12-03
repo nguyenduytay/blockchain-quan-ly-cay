@@ -19,6 +19,12 @@ function Navigation({ user, onLogout, activeTab, onTabChange }) {
               Trang chủ
             </Nav.Link>
             <Nav.Link 
+              active={activeTab === 'dashboard'} 
+              onClick={() => onTabChange('dashboard')}
+            >
+              Dashboard
+            </Nav.Link>
+            <Nav.Link 
               active={activeTab === 'caytrong'} 
               onClick={() => onTabChange('caytrong')}
             >
@@ -30,7 +36,7 @@ function Navigation({ user, onLogout, activeTab, onTabChange }) {
             >
               Báo cáo
             </Nav.Link>
-            {user?.role === 'admin' && (
+            {(user?.role === 'admin' || user?.role === 'manager') && (
               <Nav.Link 
                 active={activeTab === 'users'} 
                 onClick={() => onTabChange('users')}

@@ -12,6 +12,9 @@ function CayTrongTable() {
   const [deleteCayTrong, setDeleteCayTrong] = useState(null);
   const [filterLoai, setFilterLoai] = useState('');
   const [filterGiaiDoan, setFilterGiaiDoan] = useState('');
+  const [filterViTri, setFilterViTri] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [useAdvancedFilter, setUseAdvancedFilter] = useState(false);
   const [formData, setFormData] = useState({
     maCay: '',
     tenCay: '',
@@ -165,17 +168,106 @@ function CayTrongTable() {
     }
   };
 
-  // Filter cay trong
+  // Export to Excel
+  const handleExportExcel = async () => {
+    try {
+      setLoading(true);
+      const response = await caytrongAPI.exportExcel();
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `cay-trong-${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      setError(err.message);
+      alert('Lỗi khi xuất Excel: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Export to PDF
+  const handleExportPDF = async () => {
+    try {
+      setLoading(true);
+      const response = await caytrongAPI.exportPDF();
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `cay-trong-${new Date().toISOString().split('T')[0]}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      setError(err.message);
+      alert('Lỗi khi xuất PDF: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Search and filter cay trong
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) {
+      await fetchCayTrongs();
+      return;
+    }
+    try {
+      setLoading(true);
+      const response = await caytrongAPI.searchCayTrong(searchTerm);
+      if (response.data.success) {
+        setCaytrongs(response.data.data);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAdvancedFilter = async () => {
+    try {
+      setLoading(true);
+      const filters = {};
+      if (filterLoai) filters.loaiCay = filterLoai;
+      if (filterGiaiDoan) filters.giaiDoan = filterGiaiDoan;
+      if (filterViTri) filters.viTri = filterViTri;
+
+      if (Object.keys(filters).length === 0) {
+        await fetchCayTrongs();
+        return;
+      }
+
+      const response = await caytrongAPI.filterCayTrong(filters);
+      if (response.data.success) {
+        setCaytrongs(response.data.data);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Client-side filter (fallback)
   const filteredCayTrongs = caytrongs.filter(item => {
     const record = item.Record || item;
     const matchLoai = !filterLoai || record.loaiCay === filterLoai;
     const matchGiaiDoan = !filterGiaiDoan || record.giaiDoan === filterGiaiDoan;
-    return matchLoai && matchGiaiDoan;
+    const matchViTri = !filterViTri || record.viTri === filterViTri;
+    const matchSearch = !searchTerm || 
+      record.tenCay.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.maCay.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.viTri.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchLoai && matchGiaiDoan && matchViTri && matchSearch;
   });
 
   // Get unique values for filters
   const uniqueLoai = [...new Set(caytrongs.map(item => (item.Record || item).loaiCay))];
   const uniqueGiaiDoan = [...new Set(caytrongs.map(item => (item.Record || item).giaiDoan))];
+  const uniqueViTri = [...new Set(caytrongs.map(item => (item.Record || item).viTri))];
 
   // Statistics
   const stats = {
@@ -223,27 +315,97 @@ function CayTrongTable() {
         <Button variant="success" onClick={handleInit}>Khởi tạo dữ liệu</Button>
         <Button variant="primary" onClick={() => handleOpenModal()}>Thêm cây trồng mới</Button>
         <Button variant="secondary" onClick={fetchCayTrongs}>Làm mới</Button>
+        <Button variant="outline-success" onClick={handleExportExcel}>Xuất Excel</Button>
+        <Button variant="outline-danger" onClick={handleExportPDF}>Xuất PDF</Button>
       </div>
 
-      {/* Filters */}
+      {/* Search Box */}
       <Row className="mb-3">
-        <Col md={6}>
-          <Form.Select value={filterLoai} onChange={(e) => setFilterLoai(e.target.value)}>
-            <option value="">Tất cả loại cây</option>
-            {uniqueLoai.map(loai => (
-              <option key={loai} value={loai}>{loai}</option>
-            ))}
-          </Form.Select>
+        <Col md={8}>
+          <Form.Control
+            type="text"
+            placeholder="Tìm kiếm theo tên cây, mã cây, hoặc vị trí..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+          />
         </Col>
-        <Col md={6}>
-          <Form.Select value={filterGiaiDoan} onChange={(e) => setFilterGiaiDoan(e.target.value)}>
-            <option value="">Tất cả giai đoạn</option>
-            {uniqueGiaiDoan.map(giaiDoan => (
-              <option key={giaiDoan} value={giaiDoan}>{giaiDoan}</option>
-            ))}
-          </Form.Select>
+        <Col md={4}>
+          <div className="d-flex gap-2">
+            <Button variant="info" onClick={handleSearch}>Tìm kiếm</Button>
+            <Button 
+              variant="outline-secondary" 
+              onClick={() => {
+                setSearchTerm('');
+                setFilterLoai('');
+                setFilterGiaiDoan('');
+                setFilterViTri('');
+                fetchCayTrongs();
+              }}
+            >
+              Xóa bộ lọc
+            </Button>
+          </div>
         </Col>
       </Row>
+
+      {/* Advanced Filters */}
+      <Card className="mb-3">
+        <Card.Header>
+          <div className="d-flex justify-content-between align-items-center">
+            <span>Bộ lọc nâng cao</span>
+            <Button
+              variant="link"
+              size="sm"
+              onClick={() => setUseAdvancedFilter(!useAdvancedFilter)}
+            >
+              {useAdvancedFilter ? 'Ẩn' : 'Hiện'}
+            </Button>
+          </div>
+        </Card.Header>
+        {useAdvancedFilter && (
+          <Card.Body>
+            <Row>
+              <Col md={4}>
+                <Form.Group>
+                  <Form.Label>Loại cây</Form.Label>
+                  <Form.Select value={filterLoai} onChange={(e) => setFilterLoai(e.target.value)}>
+                    <option value="">Tất cả loại cây</option>
+                    {uniqueLoai.map(loai => (
+                      <option key={loai} value={loai}>{loai}</option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group>
+                  <Form.Label>Giai đoạn</Form.Label>
+                  <Form.Select value={filterGiaiDoan} onChange={(e) => setFilterGiaiDoan(e.target.value)}>
+                    <option value="">Tất cả giai đoạn</option>
+                    {uniqueGiaiDoan.map(giaiDoan => (
+                      <option key={giaiDoan} value={giaiDoan}>{giaiDoan}</option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group>
+                  <Form.Label>Vị trí</Form.Label>
+                  <Form.Select value={filterViTri} onChange={(e) => setFilterViTri(e.target.value)}>
+                    <option value="">Tất cả vị trí</option>
+                    {uniqueViTri.map(viTri => (
+                      <option key={viTri} value={viTri}>{viTri}</option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+            </Row>
+            <Button variant="primary" onClick={handleAdvancedFilter} className="mt-2">
+              Áp dụng bộ lọc
+            </Button>
+          </Card.Body>
+        )}
+      </Card>
 
       {/* Table */}
       {loading ? (

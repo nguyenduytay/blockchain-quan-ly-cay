@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Container, Card, Form, Button, Alert } from 'react-bootstrap';
 import { authAPI, testConnection } from '../services/api';
 import './Login.css';
@@ -108,7 +109,12 @@ function Login({ onLogin }) {
               </Form.Group>
 
               <Form.Group className="mb-3">
-                <Form.Label>Mật khẩu</Form.Label>
+                <div className="d-flex justify-content-between align-items-center">
+                  <Form.Label>Mật khẩu</Form.Label>
+                  <Link to="/forgot-password" className="text-decoration-none small">
+                    Quên mật khẩu?
+                  </Link>
+                </div>
                 <Form.Control
                   type="password"
                   placeholder="Nhập mật khẩu"

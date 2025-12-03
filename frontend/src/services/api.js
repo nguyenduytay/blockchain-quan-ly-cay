@@ -128,6 +128,33 @@ export const caytrongAPI = {
   // Cap nhat nang suat
   updateNangSuat: (maCay, nangSuatMoi) => api.patch(`/caytrong/${maCay}/nangsuat`, { nangSuatMoi }),
 
+  // Tim kiem full-text
+  searchCayTrong: (query) => api.get(`/caytrong/search?q=${encodeURIComponent(query)}`),
+
+  // Loc ket hop nhieu tieu chi
+  filterCayTrong: (filters) => {
+    const params = new URLSearchParams();
+    if (filters.loaiCay) params.append('loaiCay', filters.loaiCay);
+    if (filters.giaiDoan) params.append('giaiDoan', filters.giaiDoan);
+    if (filters.viTri) params.append('viTri', filters.viTri);
+    return api.get(`/caytrong/filter?${params.toString()}`);
+  },
+
+  // Export Excel
+  exportExcel: () => api.get('/caytrong/export/excel', { responseType: 'blob' }),
+
+  // Export PDF
+  exportPDF: () => api.get('/caytrong/export/pdf', { responseType: 'blob' }),
+
+  // Import Excel/CSV
+  importFile: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/caytrong/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+
   // Test connection
   testConnection: testConnection
 };
@@ -136,7 +163,10 @@ export const caytrongAPI = {
 export const authAPI = {
   login: (username, password) => api.post('/auth/login', { username, password }),
   register: (data) => api.post('/auth/register', data),
-  getMe: () => api.get('/auth/me')
+  getMe: () => api.get('/auth/me'),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token, newPassword) => api.post('/auth/reset-password', { token, newPassword }),
+  changePassword: (currentPassword, newPassword) => api.post('/auth/change-password', { currentPassword, newPassword })
 };
 
 // User Management API
@@ -149,7 +179,10 @@ export const userAPI = {
 
 // Report API
 export const reportAPI = {
-  getReport: () => api.get('/reports')
+  getReport: () => api.get('/reports'),
+  saveReport: () => api.post('/reports'),
+  getReportHistory: () => api.get('/reports/history'),
+  getReportById: (reportId) => api.get(`/reports/${reportId}`)
 };
 
 export { testConnection };

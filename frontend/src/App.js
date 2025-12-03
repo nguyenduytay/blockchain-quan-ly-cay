@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Login from './components/Login';
 import Register from './components/Register';
+import ForgotPassword from './components/ForgotPassword';
+import ResetPassword from './components/ResetPassword';
 import Navigation from './components/Navigation';
 import HomePage from './components/HomePage';
+import Dashboard from './components/Dashboard';
 import CayTrongTable from './components/CayTrongTable';
 import UserManagement from './components/UserManagement';
 import ReportPage from './components/ReportPage';
@@ -74,6 +78,8 @@ function App() {
     switch (activeTab) {
       case 'home':
         return <HomePage user={user} />;
+      case 'dashboard':
+        return <Dashboard currentUser={user} />;
       case 'caytrong':
         return <CayTrongTable />;
       case 'report':
@@ -98,32 +104,57 @@ function App() {
     );
   }
 
-  if (!user || !token) {
-    if (showRegister) {
-      return <Register onRegisterSuccess={() => setShowRegister(false)} />;
-    }
-    return <Login onLogin={handleLogin} />;
-  }
-
   return (
-    <div className="App">
-      <Navigation 
-        user={user} 
-        onLogout={handleLogout}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-      />
-      
-      <main className="main-content">
-        {renderContent()}
-      </main>
-      
-      <footer className="app-footer">
-        <div className="container">
-          <p className="mb-0">© 2024 QLCayTrong Blockchain App - Powered by Hyperledger Fabric & React.js</p>
-        </div>
-      </footer>
-    </div>
+    <Router>
+      <Routes>
+        {/* Public routes */}
+        <Route 
+          path="/login" 
+          element={!user || !token ? <Login onLogin={handleLogin} /> : <Navigate to="/" replace />} 
+        />
+        <Route 
+          path="/register" 
+          element={!user || !token ? <Register onRegisterSuccess={() => setShowRegister(false)} /> : <Navigate to="/" replace />} 
+        />
+        <Route 
+          path="/forgot-password" 
+          element={!user || !token ? <ForgotPassword /> : <Navigate to="/" replace />} 
+        />
+        <Route 
+          path="/reset-password" 
+          element={!user || !token ? <ResetPassword /> : <Navigate to="/" replace />} 
+        />
+
+        {/* Protected routes */}
+        <Route 
+          path="/*" 
+          element={
+            user && token ? (
+              <div className="App">
+                <Navigation 
+                  user={user} 
+                  onLogout={handleLogout}
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                />
+                
+                <main className="main-content">
+                  {renderContent()}
+                </main>
+                
+                <footer className="app-footer">
+                  <div className="container">
+                    <p className="mb-0">© 2024 QLCayTrong Blockchain App - Powered by Hyperledger Fabric & React.js</p>
+                  </div>
+                </footer>
+              </div>
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+      </Routes>
+    </Router>
   );
 }
 
