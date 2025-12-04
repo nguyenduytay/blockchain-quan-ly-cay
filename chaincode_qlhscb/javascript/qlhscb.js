@@ -217,13 +217,16 @@ class QLHoSoCanBo extends Contract {
 
     // ============ USER MANAGEMENT FUNCTIONS ============
     
-    async createUser(ctx, username, password, fullName, email, phone, role) {
+    async createUser(ctx, username, password, fullName, email, phone, role, timestamp) {
         console.info('============= START : Tao User Moi ===========');
         const userKey = `USER_${username}`;
         const exists = await ctx.stub.getState(userKey);
         if (exists && exists.length > 0) {
             throw new Error(`User ${username} da ton tai`);
         }
+
+        // Sử dụng timestamp từ backend để đảm bảo deterministic
+        const createdAt = timestamp || new Date().toISOString();
 
         const user = {
             docType: 'user',
@@ -235,7 +238,7 @@ class QLHoSoCanBo extends Contract {
             role: role || 'user',
             emailVerified: false,
             phoneVerified: false,
-            createdAt: new Date().toISOString(),
+            createdAt: createdAt,
             isActive: true
         };
 
@@ -276,7 +279,7 @@ class QLHoSoCanBo extends Contract {
         return JSON.stringify(allResults);
     }
 
-    async updateUser(ctx, username, newFullName, newEmail, newRole, newIsActive) {
+    async updateUser(ctx, username, newFullName, newEmail, newRole, newIsActive, timestamp) {
         console.info('============= START : Cap Nhat User ===========');
         const userKey = `USER_${username}`;
         const userAsBytes = await ctx.stub.getState(userKey);
@@ -289,7 +292,8 @@ class QLHoSoCanBo extends Contract {
         if (newEmail) user.email = newEmail;
         if (newRole !== undefined && newRole !== null) user.role = newRole;
         if (newIsActive !== undefined && newIsActive !== null) user.isActive = newIsActive === 'true' || newIsActive === true;
-        user.updatedAt = new Date().toISOString();
+        // Sử dụng timestamp từ backend để đảm bảo deterministic
+        user.updatedAt = timestamp || new Date().toISOString();
 
         await ctx.stub.putState(userKey, Buffer.from(JSON.stringify(user)));
         console.info(`Da cap nhat user: ${username}`);
@@ -364,16 +368,18 @@ class QLHoSoCanBo extends Contract {
 
     // ============ RESET PASSWORD FUNCTIONS ============
 
-    async createResetToken(ctx, username, token, expiresAt) {
+    async createResetToken(ctx, username, token, expiresAt, timestamp) {
         console.info('============= START : Tao Reset Token ===========');
         const tokenKey = `RESET_${token}`;
+        // Sử dụng timestamp từ backend để đảm bảo deterministic
+        const createdAt = timestamp || new Date().toISOString();
         const tokenData = {
             docType: 'resetToken',
             username: username,
             token: token,
             expiresAt: expiresAt,
             used: false,
-            createdAt: new Date().toISOString()
+            createdAt: createdAt
         };
         await ctx.stub.putState(tokenKey, Buffer.from(JSON.stringify(tokenData)));
         console.info(`Da tao reset token cho user: ${username}`);
@@ -389,7 +395,7 @@ class QLHoSoCanBo extends Contract {
         return tokenAsBytes.toString();
     }
 
-    async updateUserPassword(ctx, username, newPassword) {
+    async updateUserPassword(ctx, username, newPassword, timestamp) {
         const userKey = `USER_${username}`;
         const userAsBytes = await ctx.stub.getState(userKey);
         if (!userAsBytes || userAsBytes.length === 0) {
@@ -397,7 +403,8 @@ class QLHoSoCanBo extends Contract {
         }
         const user = JSON.parse(userAsBytes.toString());
         user.password = newPassword;
-        user.updatedAt = new Date().toISOString();
+        // Sử dụng timestamp từ backend để đảm bảo deterministic
+        user.updatedAt = timestamp || new Date().toISOString();
         await ctx.stub.putState(userKey, Buffer.from(JSON.stringify(user)));
         return JSON.stringify({ success: true });
     }
@@ -442,13 +449,15 @@ class QLHoSoCanBo extends Contract {
 
     // ============ REPORT HISTORY FUNCTIONS ============
 
-    async saveReport(ctx, reportId, reportData) {
+    async saveReport(ctx, reportId, reportData, timestamp) {
         const reportKey = `REPORT_${reportId}`;
+        // Sử dụng timestamp từ backend để đảm bảo deterministic
+        const createdAt = timestamp || new Date().toISOString();
         const report = {
             docType: 'report',
             reportId: reportId,
             ...JSON.parse(reportData),
-            createdAt: new Date().toISOString()
+            createdAt: createdAt
         };
         await ctx.stub.putState(reportKey, Buffer.from(JSON.stringify(report)));
         return JSON.stringify(report);

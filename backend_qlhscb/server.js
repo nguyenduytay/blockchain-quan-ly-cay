@@ -116,27 +116,13 @@ async function getGateway(userName) {
     }
 
     const gateway = new Gateway();
-    const discoveryEnabled = process.env.DISCOVERY_ENABLED !== 'false';
-    
-    try {
-        await gateway.connect(ccp, {
-            wallet,
-            identity: userName,
-            discovery: { enabled: discoveryEnabled, asLocalhost: true }
-        });
-    } catch (error) {
-        // Fallback: retry without discovery if access denied
-        if (error.message && error.message.includes('access denied') && discoveryEnabled) {
-            await gateway.disconnect();
-            await gateway.connect(ccp, {
-                wallet,
-                identity: userName,
-                discovery: { enabled: false, asLocalhost: true }
-            });
-        } else {
-            throw error;
-        }
-    }
+    // Tắt discovery để tránh lỗi "Peer endorsements do not match"
+    // Discovery có thể gây lệch peer trong endorsement
+    await gateway.connect(ccp, {
+        wallet,
+        identity: userName,
+        discovery: { enabled: false, asLocalhost: true }
+    });
 
     return gateway;
 }
@@ -382,8 +368,11 @@ app.post('/api/auth/register', async (req, res) => {
 
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
+        
+        // Tạo timestamp để đảm bảo deterministic trong chaincode
+        const timestamp = new Date().toISOString();
 
-        await contract.submitTransaction('createUser', username, hashedPassword, fullName, email, req.body.phone || '', role || 'user');
+        await contract.submitTransaction('createUser', username, hashedPassword, fullName, email, req.body.phone || '', role || 'user', timestamp);
         
         if (gateway) {
             await gateway.disconnect();
@@ -576,8 +565,11 @@ app.put('/api/users/:username', authenticateToken, async (req, res) => {
         // Only admin can change role and isActive
         const updateRole = (req.user.role === 'admin' && role) ? role : undefined;
         const updateIsActive = (req.user.role === 'admin' && isActive !== undefined) ? isActive : undefined;
+        
+        // Tạo timestamp để đảm bảo deterministic trong chaincode
+        const timestamp = new Date().toISOString();
 
-        await contract.submitTransaction('updateUser', req.params.username, fullName || '', email || '', updateRole || '', updateIsActive || '');
+        await contract.submitTransaction('updateUser', req.params.username, fullName || '', email || '', updateRole || '', updateIsActive || '', timestamp);
         await gateway.disconnect();
 
         res.json({ success: true, message: 'Cập nhật thông tin thành công' });
@@ -643,8 +635,11 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
         const resetToken = crypto.randomBytes(32).toString('hex');
         const expiresAt = new Date(Date.now() + 3600000).toISOString();
+        
+        // Tạo timestamp để đảm bảo deterministic trong chaincode
+        const timestamp = new Date().toISOString();
 
-        await contract.submitTransaction('createResetToken', user.Record.username, resetToken, expiresAt);
+        await contract.submitTransaction('createResetToken', user.Record.username, resetToken, expiresAt, timestamp);
         await gateway.disconnect();
 
         // Send email/SMS (if configured)
@@ -699,7 +694,11 @@ app.post('/api/auth/reset-password', async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
-        await contract.submitTransaction('updateUserPassword', tokenData.username, hashedPassword);
+        
+        // Tạo timestamp để đảm bảo deterministic trong chaincode
+        const timestamp = new Date().toISOString();
+        
+        await contract.submitTransaction('updateUserPassword', tokenData.username, hashedPassword, timestamp);
         await contract.submitTransaction('markResetTokenUsed', token);
         await gateway.disconnect();
 
@@ -733,7 +732,11 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
-        await contract.submitTransaction('updateUserPassword', req.user.username, hashedPassword);
+        
+        // Tạo timestamp để đảm bảo deterministic trong chaincode
+        const timestamp = new Date().toISOString();
+        
+        await contract.submitTransaction('updateUserPassword', req.user.username, hashedPassword, timestamp);
         await gateway.disconnect();
 
         res.json({ success: true, message: 'Đổi mật khẩu thành công' });
@@ -1129,14 +1132,17 @@ app.post('/api/reports', authenticateToken, async (req, res) => {
             stats.byGioiTinh[gioiTinh]++;
         });
 
+        // Tạo timestamp để đảm bảo deterministic trong chaincode
+        const timestamp = new Date().toISOString();
+        
         const reportData = {
-            generatedAt: new Date().toISOString(),
+            generatedAt: timestamp,
             generatedBy: req.user.username,
             statistics: stats,
             data: hosocanbos
         };
 
-        await contract.submitTransaction('saveReport', reportId, JSON.stringify(reportData));
+        await contract.submitTransaction('saveReport', reportId, JSON.stringify(reportData), timestamp);
         await gateway.disconnect();
 
         res.json({ success: true, reportId, report: reportData });
