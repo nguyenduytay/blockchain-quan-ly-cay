@@ -128,6 +128,33 @@ export const hosocanboAPI = {
   // Cap nhat luong
   updateLuong: (maCanBo, luongMoi) => api.patch(`/hosocanbo/${maCanBo}/luong`, { luongMoi }),
 
+  // Tim kiem full-text
+  searchHoSoCanBo: (query) => api.get(`/hosocanbo/search?q=${encodeURIComponent(query)}`),
+
+  // Loc ket hop nhieu tieu chi
+  filterHoSoCanBo: (filters) => {
+    const params = new URLSearchParams();
+    if (filters.phongBan) params.append('phongBan', filters.phongBan);
+    if (filters.chucVu) params.append('chucVu', filters.chucVu);
+    if (filters.trinhDo) params.append('trinhDo', filters.trinhDo);
+    return api.get(`/hosocanbo/filter?${params.toString()}`);
+  },
+
+  // Export Excel
+  exportExcel: () => api.get('/hosocanbo/export/excel', { responseType: 'blob' }),
+
+  // Export PDF
+  exportPDF: () => api.get('/hosocanbo/export/pdf', { responseType: 'blob' }),
+
+  // Import Excel/CSV
+  importFile: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/hosocanbo/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+
   // Test connection
   testConnection: testConnection
 };
@@ -136,7 +163,12 @@ export const hosocanboAPI = {
 export const authAPI = {
   login: (username, password) => api.post('/auth/login', { username, password }),
   register: (data) => api.post('/auth/register', data),
-  getMe: () => api.get('/auth/me')
+  getMe: () => api.get('/auth/me'),
+  forgotPassword: (email, phone) => api.post('/auth/forgot-password', { email, phone }),
+  resetPassword: (token, newPassword) => api.post('/auth/reset-password', { token, newPassword }),
+  changePassword: (currentPassword, newPassword) => api.post('/auth/change-password', { currentPassword, newPassword }),
+  verifyEmail: (token) => api.post('/auth/verify-email', { token }),
+  verifyPhone: (otp) => api.post('/auth/verify-phone', { otp })
 };
 
 // User Management API
@@ -149,7 +181,10 @@ export const userAPI = {
 
 // Report API
 export const reportAPI = {
-  getReport: () => api.get('/reports')
+  getReport: () => api.get('/reports'),
+  saveReport: () => api.post('/reports'),
+  getReportHistory: () => api.get('/reports/history'),
+  getReportById: (reportId) => api.get(`/reports/${reportId}`)
 };
 
 export { testConnection };

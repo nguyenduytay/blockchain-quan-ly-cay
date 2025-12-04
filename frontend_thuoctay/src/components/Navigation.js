@@ -4,10 +4,10 @@ import './Navigation.css';
 
 function Navigation({ user, onLogout, activeTab, onTabChange }) {
   return (
-    <Navbar bg="primary" variant="dark" expand="lg" className="custom-navbar">
+    <Navbar bg="danger" variant="dark" expand="lg" className="custom-navbar">
       <Container fluid>
         <Navbar.Brand href="#" onClick={() => onTabChange('home')}>
-          <span className="brand-icon">👔</span> QLHoSoCanBo
+          <span className="brand-icon">💊</span> QLThuocTay
         </Navbar.Brand>
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">
@@ -25,10 +25,10 @@ function Navigation({ user, onLogout, activeTab, onTabChange }) {
               Dashboard
             </Nav.Link>
             <Nav.Link 
-              active={activeTab === 'hosocanbo'} 
-              onClick={() => onTabChange('hosocanbo')}
+              active={activeTab === 'thuoctay'} 
+              onClick={() => onTabChange('thuoctay')}
             >
-              Quản lý hồ sơ cán bộ
+              Quản lý thuốc tây
             </Nav.Link>
             <Nav.Link 
               active={activeTab === 'report'} 

@@ -217,7 +217,7 @@ class QLHoSoCanBo extends Contract {
 
     // ============ USER MANAGEMENT FUNCTIONS ============
     
-    async createUser(ctx, username, password, fullName, email, role) {
+    async createUser(ctx, username, password, fullName, email, phone, role) {
         console.info('============= START : Tao User Moi ===========');
         const userKey = `USER_${username}`;
         const exists = await ctx.stub.getState(userKey);
@@ -231,7 +231,10 @@ class QLHoSoCanBo extends Contract {
             password: password, // Trong thuc te nen hash password
             fullName: fullName,
             email: email,
+            phone: phone || '',
             role: role || 'user',
+            emailVerified: false,
+            phoneVerified: false,
             createdAt: new Date().toISOString(),
             isActive: true
         };
@@ -325,6 +328,157 @@ class QLHoSoCanBo extends Contract {
         // Khong tra ve password
         delete user.password;
         return JSON.stringify(user);
+    }
+
+    // ============ SEARCH & FILTER FUNCTIONS ============
+
+    async searchHoSoCanBo(ctx, searchTerm) {
+        console.info('============= START : Tim Kiem Ho So Can Bo ===========');
+        const allHoSoCanBo = JSON.parse(await this.queryAllHoSoCanBo(ctx));
+        const term = searchTerm.toLowerCase();
+        const result = allHoSoCanBo.filter(item => {
+            const record = item.Record;
+            return record.hoTen.toLowerCase().includes(term) ||
+                   record.maCanBo.toLowerCase().includes(term) ||
+                   record.phongBan.toLowerCase().includes(term) ||
+                   record.chucVu.toLowerCase().includes(term) ||
+                   record.trinhDo.toLowerCase().includes(term);
+        });
+        console.info(`Tim thay ${result.length} ket qua cho "${searchTerm}"`);
+        return JSON.stringify(result);
+    }
+
+    async filterHoSoCanBo(ctx, phongBan, chucVu, trinhDo) {
+        console.info('============= START : Loc Ho So Can Bo ===========');
+        const allHoSoCanBo = JSON.parse(await this.queryAllHoSoCanBo(ctx));
+        const result = allHoSoCanBo.filter(item => {
+            const record = item.Record;
+            const matchPhongBan = !phongBan || record.phongBan === phongBan;
+            const matchChucVu = !chucVu || record.chucVu === chucVu;
+            const matchTrinhDo = !trinhDo || record.trinhDo === trinhDo;
+            return matchPhongBan && matchChucVu && matchTrinhDo;
+        });
+        console.info(`Tim thay ${result.length} ket qua`);
+        return JSON.stringify(result);
+    }
+
+    // ============ RESET PASSWORD FUNCTIONS ============
+
+    async createResetToken(ctx, username, token, expiresAt) {
+        console.info('============= START : Tao Reset Token ===========');
+        const tokenKey = `RESET_${token}`;
+        const tokenData = {
+            docType: 'resetToken',
+            username: username,
+            token: token,
+            expiresAt: expiresAt,
+            used: false,
+            createdAt: new Date().toISOString()
+        };
+        await ctx.stub.putState(tokenKey, Buffer.from(JSON.stringify(tokenData)));
+        console.info(`Da tao reset token cho user: ${username}`);
+        return JSON.stringify(tokenData);
+    }
+
+    async getResetToken(ctx, token) {
+        const tokenKey = `RESET_${token}`;
+        const tokenAsBytes = await ctx.stub.getState(tokenKey);
+        if (!tokenAsBytes || tokenAsBytes.length === 0) {
+            throw new Error('Token khong ton tai hoac da het han');
+        }
+        return tokenAsBytes.toString();
+    }
+
+    async updateUserPassword(ctx, username, newPassword) {
+        const userKey = `USER_${username}`;
+        const userAsBytes = await ctx.stub.getState(userKey);
+        if (!userAsBytes || userAsBytes.length === 0) {
+            throw new Error(`User ${username} khong ton tai`);
+        }
+        const user = JSON.parse(userAsBytes.toString());
+        user.password = newPassword;
+        user.updatedAt = new Date().toISOString();
+        await ctx.stub.putState(userKey, Buffer.from(JSON.stringify(user)));
+        return JSON.stringify({ success: true });
+    }
+
+    async markResetTokenUsed(ctx, token) {
+        const tokenKey = `RESET_${token}`;
+        const tokenAsBytes = await ctx.stub.getState(tokenKey);
+        if (!tokenAsBytes || tokenAsBytes.length === 0) {
+            throw new Error('Token khong ton tai');
+        }
+        const tokenData = JSON.parse(tokenAsBytes.toString());
+        tokenData.used = true;
+        await ctx.stub.putState(tokenKey, Buffer.from(JSON.stringify(tokenData)));
+        return JSON.stringify(tokenData);
+    }
+
+    // ============ EMAIL/PHONE VERIFICATION FUNCTIONS ============
+
+    async verifyEmail(ctx, username) {
+        const userKey = `USER_${username}`;
+        const userAsBytes = await ctx.stub.getState(userKey);
+        if (!userAsBytes || userAsBytes.length === 0) {
+            throw new Error(`User ${username} khong ton tai`);
+        }
+        const user = JSON.parse(userAsBytes.toString());
+        user.emailVerified = true;
+        await ctx.stub.putState(userKey, Buffer.from(JSON.stringify(user)));
+        return JSON.stringify({ success: true });
+    }
+
+    async verifyPhone(ctx, username) {
+        const userKey = `USER_${username}`;
+        const userAsBytes = await ctx.stub.getState(userKey);
+        if (!userAsBytes || userAsBytes.length === 0) {
+            throw new Error(`User ${username} khong ton tai`);
+        }
+        const user = JSON.parse(userAsBytes.toString());
+        user.phoneVerified = true;
+        await ctx.stub.putState(userKey, Buffer.from(JSON.stringify(user)));
+        return JSON.stringify({ success: true });
+    }
+
+    // ============ REPORT HISTORY FUNCTIONS ============
+
+    async saveReport(ctx, reportId, reportData) {
+        const reportKey = `REPORT_${reportId}`;
+        const report = {
+            docType: 'report',
+            reportId: reportId,
+            ...JSON.parse(reportData),
+            createdAt: new Date().toISOString()
+        };
+        await ctx.stub.putState(reportKey, Buffer.from(JSON.stringify(report)));
+        return JSON.stringify(report);
+    }
+
+    async getReport(ctx, reportId) {
+        const reportKey = `REPORT_${reportId}`;
+        const reportAsBytes = await ctx.stub.getState(reportKey);
+        if (!reportAsBytes || reportAsBytes.length === 0) {
+            throw new Error(`Bao cao ${reportId} khong ton tai`);
+        }
+        return reportAsBytes.toString();
+    }
+
+    async getAllReports(ctx) {
+        const startKey = 'REPORT_';
+        const endKey = 'REPORT_\uffff';
+        const allResults = [];
+        for await (const {key, value} of ctx.stub.getStateByRange(startKey, endKey)) {
+            const strValue = Buffer.from(value).toString('utf8');
+            let record;
+            try {
+                record = JSON.parse(strValue);
+            } catch (err) {
+                console.log(err);
+                record = strValue;
+            }
+            allResults.push({ Key: key, Record: record });
+        }
+        return JSON.stringify(allResults);
     }
 }
 

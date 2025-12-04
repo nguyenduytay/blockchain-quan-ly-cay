@@ -377,17 +377,26 @@ ENABLE_SCHEDULED_REPORTS=false
 
 ```bash
 # Bước 1: Enroll admin
-npm run enrollAdmin
+node enrollAdmin.js
 ```
 
 **Phải thấy:**
 ```
+Wallet path: /home/user/backend/wallet
 Successfully enrolled admin user "admin" and imported it into the wallet
 ```
 
+**QUAN TRỌNG**: Sửa file `registerUser.js`, thay đổi `USER_NAME` thành mã sinh viên của bạn (nếu muốn):
+
+```javascript
+const USER_NAME = "appUser"; // có thể chọn mssv
+```
+
+Sau đó chạy:
+
 ```bash
 # Bước 2: Register và enroll app user
-npm run registerUser
+node registerUser.js
 ```
 
 **Phải thấy:**
@@ -405,10 +414,25 @@ ls -la wallet/
 - Thư mục `admin/`
 - Thư mục `appUser/`
 
-### 2.7. Chạy Backend Server
+### 2.7. Cấu hình USER_NAME trong server.js (nếu cần)
+
+Nếu muốn sử dụng biến môi trường:
 
 ```bash
-npm start
+export USER_NAME=appUser
+node server.js
+```
+
+Hoặc sửa trực tiếp trong `server.js`:
+
+```javascript
+const userName = process.env.USER_NAME || "appUser"; 
+```
+
+### 2.8. Chạy Backend Server
+
+```bash
+node server.js
 ```
 
 **Phải thấy:**
@@ -421,12 +445,14 @@ npm start
 
 Server sẽ chạy trên port **3006** (mặc định).
 
-### 2.8. Kiểm Tra Server
+### 2.9. Kiểm Tra Server
 
 Mở terminal mới và test:
 
 ```bash
 curl http://localhost:3006/health
+# hoặc
+curl http://192.168.80.10:3006/health
 ```
 
 **Phải trả về:**
@@ -473,27 +499,24 @@ npm install
 
 ### 3.4. Cấu Hình API URL
 
-Tạo file `.env` trong thư mục `frontend/`:
+**Nếu API server chạy trên địa chỉ khác hoặc truy cập từ xa:**
+Tạo file `.env`:
 
 ```bash
-cd frontend
-cat > .env << EOF
-REACT_APP_API_URL=http://localhost:3006/api
-PORT=3000
-EOF
+# Nếu truy cập từ máy khác đến VMHyper
+echo "REACT_APP_API_URL=http://192.168.80.10:3006/api" > .env
 ```
 
-**Hoặc nếu chạy trên server khác:**
+**Hoặc nếu chạy local:**
 
 ```bash
-REACT_APP_API_URL=http://192.168.80.10:3006/api
-PORT=3000
+echo "REACT_APP_API_URL=http://localhost:3006/api" > .env
 ```
 
 ### 3.5. Chạy Frontend
 
 ```bash
-npm start
+PORT=3000 npm start
 ```
 
 Frontend sẽ chạy trên port **3000** (mặc định).
@@ -502,28 +525,26 @@ Truy cập ứng dụng tại: `http://localhost:3000` hoặc `http://192.168.80
 
 ---
 
-## 🚀 Bước 4: Sử Dụng Ứng Dụng
+## 🚀 Bước 4: Kiểm Tra và Test
 
-### 4.1. Tạo Tài Khoản Đầu Tiên
-
-**QUAN TRỌNG:** Bạn phải tạo tài khoản trước khi đăng nhập!
-
-**Cách 1: Dùng Trang Đăng Ký trên Web (Dễ dàng)**
-
-1. Mở trình duyệt và truy cập `http://localhost:3000`
-2. Click **"Đăng ký ngay"** ở cuối trang login
-3. Điền thông tin:
-   - Tên đăng nhập: `admin`
-   - Họ tên: `Administrator`
-   - Email: `admin@example.com`
-   - Mật khẩu: `admin123`
-   - Xác nhận mật khẩu: `admin123`
-   - Vai trò: Chọn **"Quản trị viên"**
-4. Click **"Đăng ký"**
-
-**Cách 2: Dùng curl (Nhanh)**
+### 4.1. Test Backend API với curl
 
 ```bash
+# Health check
+curl http://localhost:3006/health
+# hoặc
+curl http://192.168.80.10:3006/health
+
+# Khởi tạo dữ liệu
+curl -X POST http://localhost:3006/api/init
+
+# Lấy tất cả cây trồng
+curl http://localhost:3006/api/caytrong
+
+# Lấy cây trồng theo mã
+curl http://localhost:3006/api/caytrong/CT001
+
+# Đăng ký user mới
 curl -X POST http://localhost:3006/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
@@ -533,16 +554,66 @@ curl -X POST http://localhost:3006/api/auth/register \
     "email": "admin@example.com",
     "role": "admin"
   }'
+
+# Đăng nhập
+curl -X POST http://localhost:3006/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin",
+    "password": "admin123"
+  }'
+
+# Tạo cây trồng mới (cần token - thay YOUR_TOKEN_HERE bằng token từ login)
+curl -X POST http://localhost:3006/api/caytrong \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -d '{
+    "maCay": "CT006",
+    "tenCay": "Cà phê Robusta",
+    "loaiCay": "Cây công nghiệp",
+    "ngayTrong": "2023-01-15",
+    "giaiDoan": "Đang phát triển",
+    "nangSuat": 2.8,
+    "dienTich": 1200,
+    "viTri": "Lâm Đồng"
+  }'
+
+# Tìm kiếm
+curl "http://localhost:3006/api/caytrong/search?q=cà phê"
+
+# Lọc
+curl "http://localhost:3006/api/caytrong/filter?loaiCay=Cây công nghiệp&giaiDoan=Trưởng thành"
 ```
 
-**Nếu thành công sẽ thấy:**
-```json
-{"success":true,"message":"Đăng ký thành công"}
-```
+### 4.2. Test Frontend
 
-### 4.2. Đăng Nhập
+1. Mở trình duyệt: `http://localhost:3000` hoặc `http://192.168.80.10:3000`
+2. Click "Đăng ký ngay" để tạo tài khoản đầu tiên
+3. Điền thông tin:
+   - Tên đăng nhập: `admin`
+   - Họ tên: `Administrator`
+   - Email: `admin@example.com`
+   - Mật khẩu: `admin123`
+   - Xác nhận mật khẩu: `admin123`
+   - Vai trò: Chọn **"Quản trị viên"**
+4. Click **"Đăng ký"**
+5. Sau khi đăng ký thành công, đăng nhập với tài khoản vừa tạo
+6. Thử các chức năng:
+   - Xem danh sách cây trồng
+   - Thêm cây trồng mới
+   - Sửa thông tin
+   - Xóa cây trồng
+   - Tìm kiếm và lọc
+   - Export Excel/PDF
+   - Import từ Excel/CSV
+   - Xem Dashboard
+   - Xem báo cáo
 
-1. Mở trình duyệt và truy cập `http://localhost:3000`
+## 📱 Bước 5: Sử Dụng Ứng Dụng
+
+### 5.1. Đăng Nhập
+
+1. Mở trình duyệt và truy cập `http://localhost:3000` hoặc `http://192.168.80.10:3000`
 2. Trang đăng nhập sẽ hiển thị
 3. Nhập thông tin:
    - **Username:** `admin`
@@ -551,7 +622,7 @@ curl -X POST http://localhost:3006/api/auth/register \
 
 Sau khi đăng nhập thành công, bạn sẽ được chuyển đến trang chủ.
 
-### 4.3. Dashboard Tổng Quan
+### 5.2. Dashboard Tổng Quan
 
 Sau khi đăng nhập, click tab **"Dashboard"** để xem:
 - **KPI Cards:** Tổng số cây, tổng diện tích, năng suất TB, cây trưởng thành
@@ -559,7 +630,7 @@ Sau khi đăng nhập, click tab **"Dashboard"** để xem:
 - **Biểu đồ tròn:** Thống kê theo giai đoạn
 - **Thông tin hệ thống:** User info, vai trò, cập nhật lần cuối
 
-### 4.4. Quản Lý Cây Trồng
+### 5.3. Quản Lý Cây Trồng
 
 **Truy cập:** Click tab **"Quản lý cây trồng"**
 
@@ -595,7 +666,7 @@ Sau khi đăng nhập, click tab **"Dashboard"** để xem:
 - Click **"Import Excel"** (sẽ được thêm vào UI)
 - Chọn file và upload
 
-### 4.5. Báo Cáo & Thống Kê
+### 5.4. Báo Cáo & Thống Kê
 
 **Truy cập:** Click tab **"Báo cáo"**
 
@@ -608,7 +679,7 @@ Sau khi đăng nhập, click tab **"Dashboard"** để xem:
 3. Click **"Xuất CSV"** để tải báo cáo về máy
 4. Click **"Làm mới báo cáo"** để tạo lại báo cáo mới nhất
 
-### 4.6. Quản Lý Người Dùng (Admin/Manager Only)
+### 5.5. Quản Lý Người Dùng (Admin/Manager Only)
 
 **Truy cập:** Click tab **"Quản lý người dùng"** (chỉ admin/manager thấy)
 
@@ -630,7 +701,7 @@ Sau khi đăng nhập, click tab **"Dashboard"** để xem:
    - Xác nhận xóa
    - **Lưu ý:** Không thể xóa chính mình
 
-### 4.7. Quản Lý Tài Khoản
+### 5.6. Quản Lý Tài Khoản
 
 **Truy cập:** Click tab **"Tài khoản"**
 
@@ -646,7 +717,7 @@ Sau khi đăng nhập, click tab **"Dashboard"** để xem:
    - Xác nhận mật khẩu mới
    - Click **"Đổi mật khẩu"**
 
-### 4.8. Reset Mật Khẩu (Quên Mật Khẩu)
+### 5.7. Reset Mật Khẩu (Quên Mật Khẩu)
 
 1. Vào trang đăng nhập
 2. Click **"Quên mật khẩu?"**
@@ -1016,8 +1087,8 @@ Authorization: Bearer <token>
 **Giải pháp:**
 ```bash
 cd ~/backend
-npm run enrollAdmin
-npm run registerUser
+node enrollAdmin.js
+node registerUser.js
 ```
 
 **Kiểm tra:**
@@ -1048,15 +1119,15 @@ cd ~/backend
 # Xóa wallet cũ
 rm -rf wallet/
 # Enroll lại
-npm run enrollAdmin
-npm run registerUser
+node enrollAdmin.js
+node registerUser.js
 ```
 
 ### Lỗi: "Cannot find module 'recharts'"
 
 **Giải pháp:**
 ```bash
-cd frontend
+cd ~/frontend
 npm install recharts
 ```
 
@@ -1064,11 +1135,31 @@ npm install recharts
 
 **Giải pháp:**
 ```bash
-cd backend
+cd ~/backend
 npm install xlsx
 cd ../frontend
 npm install xlsx
 ```
+
+### Lỗi: "Cannot connect to peer"
+
+- **Nguyên nhân**: Fabric network chưa khởi động
+- **Giải pháp**: Kiểm tra `docker ps` và khởi động lại network
+
+### Lỗi: "Chaincode not found"
+
+- **Nguyên nhân**: Chaincode chưa được deploy
+- **Giải pháp**: Deploy lại chaincode bằng `./network.sh deployCC -ccn qlcaytrong -ccp ../chaincode/qlcaytrong/javascript -ccl javascript`
+
+### Lỗi: "CORS error" trong frontend
+
+- **Nguyên nhân**: Backend không cho phép CORS
+- **Giải pháp**: Kiểm tra `cors()` middleware trong `server.js`
+
+### Lỗi: "Connection refused" trong frontend
+
+- **Nguyên nhân**: Backend server chưa chạy hoặc sai port
+- **Giải pháp**: Kiểm tra backend đang chạy trên port 3006
 
 ### Lỗi: Email không gửi được
 
@@ -1080,7 +1171,48 @@ npm install xlsx
 3. Kiểm tra firewall/antivirus có chặn không
 4. Nếu không cấu hình email, reset password vẫn hoạt động nhưng token sẽ được trả về trong response
 
-### Lỗi CLI Container
+## 🔧 Bước 6: Sử dụng lệnh peer (Tùy chọn)
+
+### 6.1. Thiết lập biến môi trường
+
+```bash
+cd /fabric-samples/test-network
+
+export HOME_TESTNETWORK=/fabric-samples/test-network
+export PATH=$HOME_TESTNETWORK/../bin:$PATH
+export FABRIC_CFG_PATH=$HOME_TESTNETWORK/../config/
+export CORE_PEER_TLS_ENABLED=true
+export CORE_PEER_LOCALMSPID="Org1MSP"
+export CORE_PEER_TLS_ROOTCERT_FILE=$HOME_TESTNETWORK/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
+export CORE_PEER_MSPCONFIGPATH=$HOME_TESTNETWORK/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_ADDRESS=localhost:7051
+```
+
+### 6.2. Các lệnh peer phổ biến
+
+```bash
+# Khởi tạo dữ liệu
+peer chaincode invoke -o localhost:7050 \
+  --ordererTLSHostnameOverride orderer.example.com \
+  --tls \
+  --cafile $HOME_TESTNETWORK/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem \
+  -C mychannel -n qlcaytrong \
+  --peerAddresses localhost:7051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt \
+  --peerAddresses localhost:9051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt \
+  -c '{"function":"initLedger","Args":[]}'
+
+# Truy vấn tất cả cây trồng
+peer chaincode query -C mychannel -n qlcaytrong \
+  -c '{"function":"queryAllCayTrong","Args":[]}'
+
+# Truy vấn cây trồng theo mã
+peer chaincode query -C mychannel -n qlcaytrong \
+  -c '{"function":"queryCayTrong","Args":["CT001"]}'
+```
+
+### 6.3. Lỗi CLI Container
 
 ```bash
 docker exec -it cli bash
@@ -1126,6 +1258,22 @@ Hệ thống hiện tại đáp ứng **100%** các yêu cầu chức năng:
 
 ---
 
+## 📊 Cấu trúc dữ liệu Cây Trồng
+
+```javascript
+{
+  docType: 'caytrong',
+  maCay: 'CT001',                    // Mã cây (unique)
+  tenCay: 'Cà phê Arabica',          // Tên cây
+  loaiCay: 'Cây công nghiệp',        // Loại cây
+  ngayTrong: '2020-01-15',           // Ngày trồng (YYYY-MM-DD)
+  giaiDoan: 'Trưởng thành',         // Giai đoạn: Mới trồng, Đang phát triển, Trưởng thành, Thu hoạch
+  nangSuat: 2.5,                     // Năng suất (tấn/ha)
+  dienTich: 1000,                    // Diện tích (ha)
+  viTri: 'Đắk Lắk'                  // Vị trí
+}
+```
+
 ## 📝 Tóm Tắt
 
 Sau khi hoàn thành các bước trên, bạn sẽ có:
@@ -1136,18 +1284,73 @@ Sau khi hoàn thành các bước trên, bạn sẽ có:
 - ✅ Hệ thống quản lý cây trồng hoàn chỉnh trên blockchain
 - ✅ **100% đáp ứng các yêu cầu chức năng**
 
----
+## 📁 Cấu trúc thư mục cuối cùng trên VMHyper
+
+```
+/fabric-samples/
+├── chaincode/
+│   └── qlcaytrong/
+│       └── javascript/
+│           ├── qlcaytrong.js
+│           ├── index.js
+│           └── package.json
+
+~/backend/                          # Backend API Server
+├── server.js
+├── enrollAdmin.js
+├── registerUser.js
+├── package.json
+├── .env
+└── wallet/                         # Fabric wallet (tự động tạo)
+    ├── admin/
+    └── appUser/
+
+~/frontend/                         # Frontend React App
+├── src/
+│   ├── components/
+│   │   ├── Dashboard.js
+│   │   ├── ForgotPassword.js
+│   │   ├── ResetPassword.js
+│   │   ├── Login.js
+│   │   ├── Register.js
+│   │   ├── Navigation.js
+│   │   ├── HomePage.js
+│   │   ├── CayTrongTable.js
+│   │   ├── UserManagement.js
+│   │   ├── ReportPage.js
+│   │   └── AccountPage.js
+│   ├── services/
+│   │   └── api.js
+│   ├── App.js
+│   ├── App.css
+│   └── index.js
+├── public/
+│   └── index.html
+├── package.json
+└── .env
+```
 
 ## 🎯 Lưu Ý Quan Trọng
 
 1. **Vị trí chaincode:** Có thể đặt tại `/fabric-samples/chaincode/qlcaytrong/` hoặc `/fabric-samples/qlcaytrong/`
-2. **Lệnh deploy:** Phải khớp với vị trí chaincode
+2. **Lệnh deploy:** Phải khớp với vị trí chaincode:
+   - Nếu tại `/fabric-samples/chaincode/qlcaytrong/`: `-ccp ../chaincode/qlcaytrong/javascript`
+   - Nếu tại `/fabric-samples/qlcaytrong/`: `-ccp ../qlcaytrong/javascript`
 3. **Backend và Frontend:** Nên đặt trong thư mục `~/backend/` và `~/frontend/` để dễ quản lý
 4. **Tên chaincode:** Luôn là `qlcaytrong` (không có dấu gạch ngang) khi deploy
 5. **Email Configuration:** Cần cấu hình để reset password hoạt động đầy đủ
 6. **File Upload:** Thư mục `uploads/` sẽ được tạo tự động khi import file
+7. **Port:** Backend chạy trên port 3006, Frontend chạy trên port 3000
 
 ---
+
+## 🔄 So Sánh 3 Hệ Thống
+
+| Hệ thống | Theme | Port Backend | Port Frontend | Chaincode Name | Icon |
+|----------|-------|--------------|---------------|----------------|------|
+| QLCayTrong | Xanh lá | 3006 | 3000 | qlcaytrong | 🌳 |
+| QLHSCB | Xanh dương/Tím | 3007 | 3001 | qlhscb | 👔 |
+| QLThuocTay | Cam/Đỏ | 3008 | 3002 | thuoctay | 💊 |
 
 **Chúc bạn triển khai thành công! 🌳**
 

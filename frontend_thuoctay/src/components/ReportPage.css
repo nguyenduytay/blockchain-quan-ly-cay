@@ -1,0 +1,50 @@
+.stat-card {
+  border: none;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s, box-shadow 0.3s;
+  margin-bottom: 20px;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.stat-primary {
+  background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
+  color: white;
+}
+
+.stat-success {
+  background: linear-gradient(135deg, #FF8E53 0%, #FFA07A 100%);
+  color: white;
+}
+
+.stat-warning {
+  background: linear-gradient(135deg, #FFA07A 0%, #FFB347 100%);
+  color: white;
+}
+
+.stat-info {
+  background: linear-gradient(135deg, #FFB347 0%, #FFD700 100%);
+  color: white;
+}
+
+.stat-icon {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin: 0;
+}
+

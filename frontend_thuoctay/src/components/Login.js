@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Card, Form, Button, Alert } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
+import { Container, Card, Form, Button, Alert } from 'react-bootstrap';
 import { authAPI, testConnection } from '../services/api';
 import './Login.css';
 
@@ -13,7 +13,6 @@ function Login({ onLogin }) {
   const [loading, setLoading] = useState(false);
   const [apiStatus, setApiStatus] = useState(null);
 
-  // Test API connection on mount
   useEffect(() => {
     const checkApi = async () => {
       const result = await testConnection();
@@ -32,17 +31,13 @@ function Login({ onLogin }) {
       const response = await authAPI.login(formData.username, formData.password);
       
       if (response && response.data && response.data.success) {
-        // Lưu token và user vào localStorage
         localStorage.setItem('token', response.data.token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
-        
-        // Gọi callback onLogin
         onLogin(response.data.user, response.data.token);
       } else {
         throw new Error('Phản hồi từ server không hợp lệ');
       }
     } catch (err) {
-      // Chỉ log error message, không log toàn bộ error object
       if (process.env.NODE_ENV === 'development') {
         console.error('Lỗi đăng nhập:', err.message || 'Đăng nhập thất bại');
       }
@@ -59,8 +54,8 @@ function Login({ onLogin }) {
         <Card className="login-card">
           <Card.Body>
             <div className="login-header">
-              <h1 className="login-title">👔 QLHoSoCanBo</h1>
-              <p className="login-subtitle">Hệ Thống Quản Lý Hồ Sơ Cán Bộ Blockchain</p>
+              <h1 className="login-title">💊 QLThuocTay</h1>
+              <p className="login-subtitle">Hệ Thống Quản Lý Thuốc Tây Blockchain</p>
             </div>
             
             {apiStatus && !apiStatus.success && (
@@ -78,13 +73,14 @@ function Login({ onLogin }) {
                     <p className="mb-2">Chạy lệnh sau trên server (VMHyper):</p>
                     <div className="bg-dark text-light p-3 rounded" style={{fontSize: '0.85rem'}}>
                       <code style={{whiteSpace: 'pre-wrap', wordBreak: 'break-all'}}>
-{`curl -X POST http://192.168.80.10:3007/api/auth/register \\
+{`curl -X POST http://192.168.80.10:3008/api/auth/register \\
   -H "Content-Type: application/json" \\
   -d '{
     "username": "admin",
     "password": "admin123",
     "fullName": "Administrator",
     "email": "admin@example.com",
+    "phone": "0123456789",
     "role": "admin"
   }'`}
                       </code>
@@ -111,7 +107,7 @@ function Login({ onLogin }) {
               <Form.Group className="mb-3">
                 <div className="d-flex justify-content-between">
                   <Form.Label>Mật khẩu</Form.Label>
-                  <Link to="/forgot-password" style={{ color: '#667eea', fontSize: '0.9rem' }}>
+                  <Link to="/forgot-password" style={{ color: '#FF6B6B', fontSize: '0.9rem' }}>
                     Quên mật khẩu?
                   </Link>
                 </div>
@@ -125,10 +121,11 @@ function Login({ onLogin }) {
               </Form.Group>
 
               <Button 
-                variant="primary" 
+                variant="danger" 
                 type="submit" 
                 className="w-100 login-button"
                 disabled={loading}
+                style={{ background: 'linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%)', border: 'none' }}
               >
                 {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
               </Button>
@@ -136,7 +133,7 @@ function Login({ onLogin }) {
 
             <div className="login-footer">
               <p className="text-muted small">
-                Chưa có tài khoản? <a href="#" onClick={(e) => { e.preventDefault(); if (window.showRegister) window.showRegister(); }}>Đăng ký ngay</a>
+                Chưa có tài khoản? <Link to="/register" style={{ color: '#FF6B6B' }}>Đăng ký ngay</Link>
               </p>
               <p className="text-muted small mt-2">
                 Powered by Hyperledger Fabric & React.js

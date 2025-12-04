@@ -1,17 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Table, Button, Modal, Form, Alert, Badge, Spinner, Row, Col, Card } from 'react-bootstrap';
+import { Container, Table, Button, Modal, Form, Alert, Badge, Spinner, Row, Col, Card, InputGroup } from 'react-bootstrap';
 import { thuoctayAPI } from '../services/api';
 
 function ThuocTayTable() {
   const [thuoctays, setThuoctays] = useState([]);
+  const [displayedThuocTays, setDisplayedThuocTays] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [editingThuocTay, setEditingThuocTay] = useState(null);
   const [deleteThuocTay, setDeleteThuocTay] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterLoai, setFilterLoai] = useState('');
   const [filterNhaSanXuat, setFilterNhaSanXuat] = useState('');
+  const [filterDonVi, setFilterDonVi] = useState('');
+  const [currentUser, setCurrentUser] = useState(null);
   const [formData, setFormData] = useState({
     maThuoc: '',
     tenThuoc: '',
@@ -43,8 +48,77 @@ function ThuocTayTable() {
   };
 
   useEffect(() => {
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    setCurrentUser(user);
     fetchThuocTays();
   }, []);
+
+  useEffect(() => {
+    applyFilters();
+  }, [thuoctays, searchQuery, filterLoai, filterNhaSanXuat, filterDonVi]);
+
+  const applyFilters = async () => {
+    try {
+      let filtered = thuoctays;
+
+      // Apply search if query exists
+      if (searchQuery.trim()) {
+        const searchResponse = await thuoctayAPI.searchThuocTay(searchQuery);
+        if (searchResponse.data.success) {
+          filtered = searchResponse.data.data;
+        }
+      }
+
+      // Apply advanced filters
+      if (filterLoai || filterNhaSanXuat || filterDonVi) {
+        const filterResponse = await thuoctayAPI.filterThuocTay({
+          loaiThuoc: filterLoai || undefined,
+          nhaSanXuat: filterNhaSanXuat || undefined,
+          donVi: filterDonVi || undefined
+        });
+        if (filterResponse.data.success) {
+          if (searchQuery.trim()) {
+            // Combine search and filter results
+            const searchIds = new Set(filtered.map(item => (item.Record || item).maThuoc));
+            filtered = filterResponse.data.data.filter(item => 
+              searchIds.has((item.Record || item).maThuoc)
+            );
+          } else {
+            filtered = filterResponse.data.data;
+          }
+        }
+      }
+
+      setDisplayedThuocTays(filtered);
+    } catch (err) {
+      // Fallback to client-side filtering
+      let filtered = thuoctays;
+      
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        filtered = filtered.filter(item => {
+          const record = item.Record || item;
+          return record.tenThuoc.toLowerCase().includes(query) ||
+                 record.maThuoc.toLowerCase().includes(query) ||
+                 record.hoatchat.toLowerCase().includes(query) ||
+                 record.nhaSanXuat.toLowerCase().includes(query) ||
+                 record.loaiThuoc.toLowerCase().includes(query);
+        });
+      }
+
+      if (filterLoai) {
+        filtered = filtered.filter(item => (item.Record || item).loaiThuoc === filterLoai);
+      }
+      if (filterNhaSanXuat) {
+        filtered = filtered.filter(item => (item.Record || item).nhaSanXuat === filterNhaSanXuat);
+      }
+      if (filterDonVi) {
+        filtered = filtered.filter(item => (item.Record || item).donVi === filterDonVi);
+      }
+
+      setDisplayedThuocTays(filtered);
+    }
+  };
 
   // Initialize data
   const handleInit = async () => {
@@ -167,17 +241,63 @@ function ThuocTayTable() {
     }
   };
 
-  // Filter thuoc tay
-  const filteredThuocTays = thuoctays.filter(item => {
-    const record = item.Record || item;
-    const matchLoai = !filterLoai || record.loaiThuoc === filterLoai;
-    const matchNhaSanXuat = !filterNhaSanXuat || record.nhaSanXuat === filterNhaSanXuat;
-    return matchLoai && matchNhaSanXuat;
-  });
-
   // Get unique values for filters
   const uniqueLoai = [...new Set(thuoctays.map(item => (item.Record || item).loaiThuoc))];
   const uniqueNhaSanXuat = [...new Set(thuoctays.map(item => (item.Record || item).nhaSanXuat))];
+  const uniqueDonVi = [...new Set(thuoctays.map(item => (item.Record || item).donVi))];
+
+  // Export functions
+  const handleExportExcel = async () => {
+    try {
+      const response = await thuoctayAPI.exportExcel();
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `thuoc-tay-${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      alert('Xuất Excel thành công!');
+    } catch (err) {
+      alert('Lỗi khi xuất Excel: ' + (err.message || 'Export failed'));
+    }
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      const response = await thuoctayAPI.exportPDF();
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `thuoc-tay-${new Date().toISOString().split('T')[0]}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      alert('Xuất PDF thành công!');
+    } catch (err) {
+      alert('Lỗi khi xuất PDF: ' + (err.message || 'Export failed'));
+    }
+  };
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      setLoading(true);
+      const response = await thuoctayAPI.importFile(file);
+      if (response.data.success) {
+        alert(`Import thành công ${response.data.results.success.length} bản ghi, ${response.data.results.errors.length} lỗi`);
+        setShowImportModal(false);
+        await fetchThuocTays();
+      }
+    } catch (err) {
+      alert('Lỗi khi import: ' + (err.message || 'Import failed'));
+    } finally {
+      setLoading(false);
+      e.target.value = '';
+    }
+  };
 
   // Check if expired
   const isExpired = (hanSuDung) => {
@@ -189,13 +309,13 @@ function ThuocTayTable() {
 
   // Statistics
   const stats = {
-    total: filteredThuocTays.length,
-    totalSoLuong: filteredThuocTays.reduce((sum, item) => sum + parseInt((item.Record || item).soLuong || 0), 0),
-    totalGiaTri: filteredThuocTays.reduce((sum, item) => {
+    total: displayedThuocTays.length,
+    totalSoLuong: displayedThuocTays.reduce((sum, item) => sum + parseInt((item.Record || item).soLuong || 0), 0),
+    totalGiaTri: displayedThuocTays.reduce((sum, item) => {
       const record = item.Record || item;
       return sum + (parseInt(record.soLuong || 0) * parseFloat(record.giaBan || 0));
     }, 0),
-    expiredCount: filteredThuocTays.filter(item => isExpired((item.Record || item).hanSuDung)).length
+    expiredCount: displayedThuocTays.filter(item => isExpired((item.Record || item).hanSuDung)).length
   };
 
   return (
@@ -205,38 +325,38 @@ function ThuocTayTable() {
       {/* Statistics Cards */}
       <Row className="mb-4">
         <Col md={3}>
-          <Card className="text-center stat-card stat-card-primary">
+          <Card className="text-center stat-card" style={{ background: 'linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%)', color: 'white' }}>
             <Card.Body>
-              <div className="stat-icon">📊</div>
-              <Card.Title>Tổng số thuốc</Card.Title>
-              <Card.Text className="h3 stat-number text-primary">{stats.total}</Card.Text>
+              <div className="stat-icon">💊</div>
+              <Card.Title style={{ color: 'white' }}>Tổng số thuốc</Card.Title>
+              <Card.Text className="h3 stat-number" style={{ color: 'white' }}>{stats.total}</Card.Text>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3}>
-          <Card className="text-center stat-card stat-card-success">
+          <Card className="text-center stat-card" style={{ background: 'linear-gradient(135deg, #FF8E53 0%, #FFA07A 100%)', color: 'white' }}>
             <Card.Body>
               <div className="stat-icon">📦</div>
-              <Card.Title>Tổng số lượng</Card.Title>
-              <Card.Text className="h3 stat-number text-success">{stats.totalSoLuong.toLocaleString()}</Card.Text>
+              <Card.Title style={{ color: 'white' }}>Tổng số lượng</Card.Title>
+              <Card.Text className="h3 stat-number" style={{ color: 'white' }}>{stats.totalSoLuong.toLocaleString()}</Card.Text>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3}>
-          <Card className="text-center stat-card stat-card-warning">
+          <Card className="text-center stat-card" style={{ background: 'linear-gradient(135deg, #FFA07A 0%, #FFB347 100%)', color: 'white' }}>
             <Card.Body>
               <div className="stat-icon">💰</div>
-              <Card.Title>Tổng giá trị (VNĐ)</Card.Title>
-              <Card.Text className="h3 stat-number text-warning">{stats.totalGiaTri.toLocaleString()}</Card.Text>
+              <Card.Title style={{ color: 'white' }}>Tổng giá trị (VNĐ)</Card.Title>
+              <Card.Text className="h3 stat-number" style={{ color: 'white' }}>{(stats.totalGiaTri / 1000000).toFixed(1)}M</Card.Text>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3}>
-          <Card className="text-center stat-card stat-card-danger">
+          <Card className="text-center stat-card" style={{ background: 'linear-gradient(135deg, #FFB347 0%, #FFD700 100%)', color: 'white' }}>
             <Card.Body>
               <div className="stat-icon">⚠️</div>
-              <Card.Title>Thuốc hết hạn</Card.Title>
-              <Card.Text className="h3 stat-number text-danger">{stats.expiredCount}</Card.Text>
+              <Card.Title style={{ color: 'white' }}>Thuốc hết hạn</Card.Title>
+              <Card.Text className="h3 stat-number" style={{ color: 'white' }}>{stats.expiredCount}</Card.Text>
             </Card.Body>
           </Card>
         </Col>
@@ -247,17 +367,55 @@ function ThuocTayTable() {
         <Button variant="success" onClick={handleInit} className="action-btn">
           <span className="btn-icon">🔄</span> Khởi tạo dữ liệu
         </Button>
-        <Button variant="primary" onClick={() => handleOpenModal()} className="action-btn">
+        <Button 
+          variant="danger" 
+          onClick={() => handleOpenModal()} 
+          className="action-btn"
+          style={{ background: 'linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%)', border: 'none' }}
+        >
           <span className="btn-icon">➕</span> Thêm thuốc mới
         </Button>
         <Button variant="secondary" onClick={fetchThuocTays} className="action-btn">
           <span className="btn-icon">🔄</span> Làm mới
         </Button>
+        <Button variant="info" onClick={handleExportExcel} className="action-btn">
+          <span className="btn-icon">📊</span> Xuất Excel
+        </Button>
+        <Button variant="warning" onClick={handleExportPDF} className="action-btn">
+          <span className="btn-icon">📄</span> Xuất PDF
+        </Button>
+        {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
+          <Button variant="primary" onClick={() => setShowImportModal(true)} className="action-btn">
+            <span className="btn-icon">📥</span> Import Excel
+          </Button>
+        )}
       </div>
+
+      {/* Search */}
+      <Row className="mb-3">
+        <Col md={12}>
+          <InputGroup>
+            <InputGroup.Text style={{ background: 'linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%)', color: 'white' }}>
+              🔍
+            </InputGroup.Text>
+            <Form.Control
+              type="text"
+              placeholder="Tìm kiếm thuốc tây (tên thuốc, mã thuốc, hoạt chất, nhà sản xuất, loại thuốc)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <Button variant="outline-secondary" onClick={() => setSearchQuery('')}>
+                ✕
+              </Button>
+            )}
+          </InputGroup>
+        </Col>
+      </Row>
 
       {/* Filters */}
       <Row className="mb-4 filter-section">
-        <Col md={6}>
+        <Col md={4}>
           <Form.Label className="filter-label">🔍 Lọc theo loại thuốc</Form.Label>
           <Form.Select 
             value={filterLoai} 
@@ -270,7 +428,7 @@ function ThuocTayTable() {
             ))}
           </Form.Select>
         </Col>
-        <Col md={6}>
+        <Col md={4}>
           <Form.Label className="filter-label">🏭 Lọc theo nhà sản xuất</Form.Label>
           <Form.Select 
             value={filterNhaSanXuat} 
@@ -280,6 +438,19 @@ function ThuocTayTable() {
             <option value="">Tất cả nhà sản xuất</option>
             {uniqueNhaSanXuat.map(nsx => (
               <option key={nsx} value={nsx}>{nsx}</option>
+            ))}
+          </Form.Select>
+        </Col>
+        <Col md={4}>
+          <Form.Label className="filter-label">📦 Lọc theo đơn vị</Form.Label>
+          <Form.Select 
+            value={filterDonVi} 
+            onChange={(e) => setFilterDonVi(e.target.value)}
+            className="filter-select"
+          >
+            <option value="">Tất cả đơn vị</option>
+            {uniqueDonVi.map(donVi => (
+              <option key={donVi} value={donVi}>{donVi}</option>
             ))}
           </Form.Select>
         </Col>
@@ -295,7 +466,7 @@ function ThuocTayTable() {
       ) : (
         <div className="table-responsive">
           <Table striped bordered hover>
-            <thead>
+            <thead style={{ background: 'linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%)', color: 'white' }}>
               <tr>
                 <th>Mã thuốc</th>
                 <th>Tên thuốc</th>
@@ -311,17 +482,17 @@ function ThuocTayTable() {
               </tr>
             </thead>
             <tbody>
-              {filteredThuocTays.length === 0 ? (
+              {displayedThuocTays.length === 0 ? (
                 <tr>
                   <td colSpan="11" className="text-center">Không có dữ liệu</td>
                 </tr>
               ) : (
-                filteredThuocTays.map((item) => {
+                displayedThuocTays.map((item) => {
                   const record = item.Record || item;
                   const expired = isExpired(record.hanSuDung);
                   return (
                     <tr key={record.maThuoc} className={expired ? 'table-danger' : ''}>
-                      <td><Badge bg="primary">{record.maThuoc}</Badge></td>
+                      <td><Badge bg="danger">{record.maThuoc}</Badge></td>
                       <td>{record.tenThuoc}</td>
                       <td>{record.hoatchat}</td>
                       <td>{record.nhaSanXuat}</td>
@@ -339,16 +510,37 @@ function ThuocTayTable() {
                       <td>{record.loaiThuoc}</td>
                       <td>
                         <div className="d-flex gap-1 flex-wrap action-buttons-row">
-                          <Button size="sm" variant="info" onClick={() => handleOpenModal(item)} className="action-btn-sm">
+                          <Button 
+                            size="sm" 
+                            variant="warning" 
+                            onClick={() => handleOpenModal(item)} 
+                            className="action-btn-sm"
+                          >
                             ✏️ Sửa
                           </Button>
-                          <Button size="sm" variant="warning" onClick={() => handleUpdateSoLuong(record.maThuoc)} className="action-btn-sm">
+                          <Button 
+                            size="sm" 
+                            variant="info" 
+                            onClick={() => handleUpdateSoLuong(record.maThuoc)} 
+                            className="action-btn-sm"
+                          >
                             📊 SL
                           </Button>
-                          <Button size="sm" variant="secondary" onClick={() => handleUpdateGiaBan(record.maThuoc)} className="action-btn-sm">
+                          <Button 
+                            size="sm" 
+                            variant="secondary" 
+                            onClick={() => handleUpdateGiaBan(record.maThuoc)} 
+                            className="action-btn-sm"
+                          >
                             💰 Giá
                           </Button>
-                          <Button size="sm" variant="danger" onClick={() => { setDeleteThuocTay(item); setShowDeleteModal(true); }} className="action-btn-sm">
+                          <Button 
+                            size="sm" 
+                            variant="danger" 
+                            onClick={() => { setDeleteThuocTay(item); setShowDeleteModal(true); }} 
+                            className="action-btn-sm"
+                            style={{ background: 'linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%)', border: 'none' }}
+                          >
                             🗑️ Xóa
                           </Button>
                         </div>
@@ -503,9 +695,39 @@ function ThuocTayTable() {
           </Modal.Body>
           <Modal.Footer>
             <Button variant="secondary" onClick={() => setShowModal(false)}>Hủy</Button>
-            <Button variant="primary" type="submit">Lưu</Button>
+            <Button 
+              variant="danger" 
+              type="submit"
+              style={{ background: 'linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%)', border: 'none' }}
+            >
+              Lưu
+            </Button>
           </Modal.Footer>
         </Form>
+      </Modal>
+
+      {/* Import Modal */}
+      <Modal show={showImportModal} onHide={() => setShowImportModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Import từ Excel/CSV</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form.Group>
+            <Form.Label>Chọn file Excel hoặc CSV</Form.Label>
+            <Form.Control
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleImportFile}
+            />
+            <Form.Text className="text-muted">
+              File phải có các cột: Mã thuốc, Tên thuốc, Hoạt chất, Nhà sản xuất, Ngày sản xuất, 
+              Hạn sử dụng, Đơn vị, Số lượng, Giá bán (VND), Loại thuốc
+            </Form.Text>
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowImportModal(false)}>Đóng</Button>
+        </Modal.Footer>
       </Modal>
 
       {/* Delete Confirmation Modal */}

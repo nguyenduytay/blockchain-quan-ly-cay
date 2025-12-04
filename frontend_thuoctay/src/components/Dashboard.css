@@ -1,0 +1,71 @@
+.kpi-card {
+  border: none;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s, box-shadow 0.3s;
+  margin-bottom: 20px;
+}
+
+.kpi-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.kpi-primary {
+  background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
+  color: white;
+}
+
+.kpi-success {
+  background: linear-gradient(135deg, #FF8E53 0%, #FFA07A 100%);
+  color: white;
+}
+
+.kpi-warning {
+  background: linear-gradient(135deg, #FFA07A 0%, #FFB347 100%);
+  color: white;
+}
+
+.kpi-info {
+  background: linear-gradient(135deg, #FFB347 0%, #FFD700 100%);
+  color: white;
+}
+
+.kpi-icon {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+}
+
+.kpi-value {
+  font-size: 2rem;
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+.kpi-label {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin: 0;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.stat-item:last-child {
+  border-bottom: none;
+}
+
+.stat-label {
+  font-weight: 500;
+  color: #FF6B6B;
+}
+
+.stat-value {
+  font-weight: bold;
+  color: #FF8E53;
+}
+

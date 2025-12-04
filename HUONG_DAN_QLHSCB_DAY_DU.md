@@ -1,4 +1,4 @@
-# Hướng Dẫn Triển Khai Hệ Thống Quản Lý Hồ Sơ Cán Bộ Blockchain
+# Hướng Dẫn Triển Khai QLHSCB (Quản Lý Hồ Sơ Cán Bộ) - Đầy Đủ Tính Năng
 
 ## Tổng quan
 
@@ -9,8 +9,8 @@ Dự án xây dựng hệ thống quản lý hồ sơ cán bộ trên Hyperledge
 3. **Frontend Web App** - Giao diện người dùng React
 
 ## Quy ước : 
-### URL_BACK_END = http://localhost:3007 hoặc = http://16.19.0.15:3007
-### URL_FRONT_END = http://localhost:8007 hoặc http://16.19.0.15:8007
+### URL_BACK_END = http://localhost:3007 hoặc = http://192.168.80.10:3007
+### URL_FRONT_END = http://localhost:3001 hoặc http://192.168.80.10:3001
 
 ## Bước 1: Chuẩn bị môi trường
 
@@ -45,7 +45,7 @@ ssh -p 15 sv102102666@wandertour.ddns.net
 **Cách 3: SSH đến IP trực tiếp (nếu có)**
 
 ```bash
-ssh hyperledger@192.168.1.15
+ssh hyperledger@192.168.80.10
 # Password: 123456
 ```
 
@@ -72,6 +72,12 @@ docker --version
 cd /fabric-samples/chaincode/
 mkdir -p qlhscb/javascript
 cd qlhscb/javascript
+```
+
+**Hoặc nếu chaincode đã có trong dự án:**
+
+```bash
+cd ~/qlcay/chaincode_qlhscb/javascript
 ```
 
 ### 2.2. Copy các file chaincode
@@ -136,6 +142,12 @@ sudo systemctl restart docker
 ./network.sh deployCC -ccn qlhscb -ccp ../chaincode/qlhscb/javascript -ccl javascript
 ```
 
+**Hoặc nếu chaincode đặt tại `~/qlcay/chaincode_qlhscb/`:**
+
+```bash
+./network.sh deployCC -ccn qlhscb -ccp ~/qlcay/chaincode_qlhscb/javascript -ccl javascript
+```
+
 ### 3.3. Kiểm tra deployment
 
 ```bash
@@ -158,8 +170,14 @@ docker ps
 
 ```bash
 cd ~
-mkdir -p qlhscb/qlhscb-backend
-cd qlhscb/qlhscb-backend
+mkdir -p qlhscb/backend_qlhscb
+cd qlhscb/backend_qlhscb
+```
+
+**Hoặc nếu backend đã có trong dự án:**
+
+```bash
+cd ~/qlcay/backend_qlhscb
 ```
 
 ### 4.2. Copy các file backend
@@ -177,7 +195,27 @@ Copy các file từ thư mục `backend_qlhscb/` của dự án:
 npm install
 ```
 
-### 4.4. Đăng ký Admin
+### 4.4. Cấu hình environment variables (Tùy chọn)
+
+Tạo file `.env`:
+
+```bash
+cat > .env << EOF
+PORT=3007
+USER_NAME=appUser
+CCP_PATH=/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/connection-org1.json
+JWT_SECRET=qlhscb-secret-key-2024
+DISCOVERY_ENABLED=true
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+FRONTEND_URL=http://192.168.80.10:3001
+ENABLE_SCHEDULED_REPORTS=true
+EOF
+```
+
+### 4.5. Đăng ký Admin
 
 ```bash
 node enrollAdmin.js
@@ -186,16 +224,16 @@ node enrollAdmin.js
 Kết quả mong đợi:
 
 ```
-Wallet path: /home/user/qlhscb/qlhscb-backend/wallet
+Wallet path: /home/user/qlhscb/backend_qlhscb/wallet
 Successfully enrolled admin user "admin" and imported it into the wallet
 ```
 
-### 4.5. Đăng ký User
+### 4.6. Đăng ký User
 
 **QUAN TRỌNG**: Sửa file `registerUser.js`, thay đổi `USER_NAME` thành mã sinh viên của bạn:
 
 ```javascript
-const USER_NAME = "appUser"; #có thể chọn mssv
+const USER_NAME = "appUser"; // có thể chọn mssv
 ```
 
 Sau đó chạy:
@@ -210,7 +248,7 @@ Kết quả mong đợi:
 Successfully registered and enrolled user "appUser"
 ```
 
-### 4.6. Cấu hình USER_NAME trong server.js (nếu cần)
+### 4.7. Cấu hình USER_NAME trong server.js (nếu cần)
 
 Nếu muốn sử dụng biến môi trường:
 
@@ -222,10 +260,10 @@ node server.js
 Hoặc sửa trực tiếp trong `server.js`:
 
 ```javascript
-const userName = process.env.USER_NAME; 
+const userName = process.env.USER_NAME || "appUser"; 
 ```
 
-### 4.7. Khởi động Backend Server
+### 4.8. Khởi động Backend Server
 
 ```bash
 node server.js
@@ -234,7 +272,9 @@ node server.js
 Server sẽ chạy trên port 3007. Kiểm tra:
 
 ```bash
-curl URL_BACK_END/health 
+curl http://localhost:3007/health
+# hoặc
+curl http://192.168.80.10:3007/health
 ```
 
 ## Bước 5: Thiết lập Frontend React App
@@ -243,24 +283,27 @@ curl URL_BACK_END/health
 
 ```bash
 cd ~
-mkdir -p qlhscb/qlhscb-frontend
-cd qlhscb/qlhscb-frontend
+mkdir -p qlhscb/frontend_qlhscb
+cd qlhscb/frontend_qlhscb
 ```
 
-**Lưu ý:** Theo tài liệu lab, frontend nên đặt trong thư mục `~/qlhscb/qlhscb-frontend/` (có thư mục cha `qlhscb`)
+**Hoặc nếu frontend đã có trong dự án:**
+
+```bash
+cd ~/qlcay/frontend_qlhscb
+```
 
 ### 5.2. Copy các file frontend
 
-Copy toàn bộ thư mục `frontend_qlhscb/` hoặc `qlhscb-frontend/` của dự án bao gồm:
+Copy toàn bộ thư mục `frontend_qlhscb/` của dự án bao gồm:
 
 - `package.json`
 - `public/index.html`
 - `src/App.js`
 - `src/App.css`
 - `src/index.js`
-- `src/components/HoSoCanBoTable.js`
+- `src/components/` (tất cả components)
 - `src/services/api.js`
-
 
 ### 5.3. Cài đặt dependencies
 
@@ -275,18 +318,22 @@ Tạo file `.env`:
 
 ```bash
 # Nếu truy cập từ máy khác đến VMHyper
-echo "REACT_APP_API_URL=URL_BACK_END/api" > .env
+echo "REACT_APP_API_URL=http://192.168.80.10:3007/api" > .env
+```
+
+**Hoặc nếu chạy local:**
+
+```bash
+echo "REACT_APP_API_URL=http://localhost:3007/api" > .env
 ```
 
 ### 5.5. Khởi động Frontend App
 
 ```bash
-PORT=8007 npm start
+PORT=3001 npm start
 ```
 
-App sẽ mở tự động trên trình duyệt tại `URL_FRONT_END`
-
-**Truy cập từ máy khác (nếu VMHyper có IP công khai):**
+App sẽ mở tự động trên trình duyệt tại `http://localhost:3001` hoặc `http://192.168.80.10:3001`
 
 ## Bước 6: Kiểm tra và Test
 
@@ -294,46 +341,70 @@ App sẽ mở tự động trên trình duyệt tại `URL_FRONT_END`
 
 ```bash
 # Health check
-curl URL_BACK_END/health
+curl http://localhost:3007/health
 
 # Khởi tạo dữ liệu
-curl -X POST URL_BACK_END/api/init
+curl -X POST http://localhost:3007/api/init
 
 # Lấy tất cả hồ sơ cán bộ
-curl URL_BACK_END/api/hosocanbo
+curl http://localhost:3007/api/hosocanbo
 
 # Lấy hồ sơ cán bộ theo mã
-curl URL_BACK_END/api/hosocanbo/CB001
+curl http://localhost:3007/api/hosocanbo/CB001
 
-# Tạo hồ sơ cán bộ mới
-curl -X POST URL_BACK_END/api/hosocanbo \
+# Đăng ký user mới
+curl -X POST http://localhost:3007/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
+    "username": "admin",
+    "password": "admin123",
+    "fullName": "Administrator",
+    "email": "admin@example.com",
+    "phone": "0123456789",
+    "role": "admin"
+  }'
+
+# Đăng nhập
+curl -X POST http://localhost:3007/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin",
+    "password": "admin123"
+  }'
+
+# Tạo hồ sơ cán bộ mới (cần token)
+curl -X POST http://localhost:3007/api/hosocanbo \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -d '{
     "maCanBo": "CB006",
-    "hoTen": "Nguyễn Văn Mới",
-    "ngaySinh": "1990-01-01",
+    "hoTen": "Nguyễn Văn A",
+    "ngaySinh": "1990-01-15",
     "gioiTinh": "Nam",
-    "chucVu": "Nhân viên",
-    "phongBan": "Phòng IT",
-    "ngayVaoLam": "2023-01-01",
+    "chucVu": "Trưởng phòng",
+    "phongBan": "Phòng Nhân sự",
+    "ngayVaoLam": "2020-01-15",
     "trinhDo": "Đại học",
-    "luong": 13000000,
-    "diaChi": "123 Đường Mới, Quận 1, TP.HCM"
+    "luong": 15000000,
+    "diaChi": "123 Đường ABC, Quận 1, TP.HCM"
   }'
 ```
 
 ### 6.2. Test Frontend
 
-1. Mở trình duyệt: `URL_FRONT_END`
-2. Click "Khởi tạo dữ liệu" để tạo dữ liệu mẫu
-3. Thử các chức năng:
+1. Mở trình duyệt: `http://localhost:3001` hoặc `http://192.168.80.10:3001`
+2. Đăng ký tài khoản mới hoặc đăng nhập
+3. Click "Khởi tạo dữ liệu" để tạo dữ liệu mẫu
+4. Thử các chức năng:
    - Xem danh sách hồ sơ cán bộ
    - Thêm hồ sơ cán bộ mới
    - Sửa thông tin
-   - Xóa hồ sơ cán bộ
-   - Lọc theo phòng ban/chức vụ
-   - Thay đổi chức vụ
-   - Cập nhật lương
+   - Xóa hồ sơ
+   - Tìm kiếm và lọc
+   - Export Excel/PDF
+   - Import từ Excel/CSV
+   - Xem Dashboard
+   - Xem báo cáo
 
 ## Bước 7: Sử dụng lệnh peer (Tùy chọn)
 
@@ -391,7 +462,7 @@ peer chaincode query -C mychannel -n qlhscb \
 ### Lỗi: "Chaincode not found"
 
 - **Nguyên nhân**: Chaincode chưa được deploy
-- **Giải pháp**: Deploy lại chaincode bằng `./network.sh deployCC`
+- **Giải pháp**: Deploy lại chaincode bằng `./network.sh deployCC -ccn qlhscb -ccp ../chaincode/qlhscb/javascript -ccl javascript`
 
 ### Lỗi: "CORS error" trong frontend
 
@@ -403,21 +474,42 @@ peer chaincode query -C mychannel -n qlhscb \
 - **Nguyên nhân**: Backend server chưa chạy hoặc sai port
 - **Giải pháp**: Kiểm tra backend đang chạy trên port 3007
 
+### Lỗi: "Peer endorsements do not match"
+
+- **Nguyên nhân**: Network không đồng bộ
+- **Giải pháp**: 
+```bash
+cd /fabric-samples/test-network
+./network.sh down
+./network.sh up createChannel -ca
+./network.sh deployCC -ccn qlhscb -ccp ../chaincode/qlhscb/javascript -ccl javascript
+```
+
+### Lỗi: "Access denied"
+
+- **Nguyên nhân**: User chưa được enroll hoặc wallet bị lỗi
+- **Giải pháp**: 
+```bash
+cd backend_qlhscb
+node enrollAdmin.js
+node registerUser.js
+```
+
 ## Cấu trúc dữ liệu Hồ Sơ Cán Bộ
 
 ```javascript
 {
   docType: 'hosocanbo',
   maCanBo: 'CB001',                    // Mã cán bộ (unique)
-  hoTen: 'Nguyễn Văn An',              // Họ tên
-  ngaySinh: '1985-05-15',              // Ngày sinh (YYYY-MM-DD)
+  hoTen: 'Nguyễn Văn A',              // Họ tên
+  ngaySinh: '1990-01-15',              // Ngày sinh (YYYY-MM-DD)
   gioiTinh: 'Nam',                     // Giới tính: Nam, Nữ
-  chucVu: 'Trưởng phòng',              // Chức vụ: Trưởng phòng, Phó phòng, Nhân viên
-  phongBan: 'Phòng Nhân sự',           // Phòng ban
-  ngayVaoLam: '2010-03-01',            // Ngày vào làm (YYYY-MM-DD)
+  chucVu: 'Trưởng phòng',             // Chức vụ
+  phongBan: 'Phòng Nhân sự',          // Phòng ban
+  ngayVaoLam: '2020-01-15',            // Ngày vào làm (YYYY-MM-DD)
   trinhDo: 'Đại học',                  // Trình độ: Trung cấp, Cao đẳng, Đại học, Thạc sĩ, Tiến sĩ
   luong: 15000000,                     // Lương (VND)
-  diaChi: '123 Đường ABC, Quận 1, TP.HCM'  // Địa chỉ
+  diaChi: '123 Đường ABC, Quận 1'     // Địa chỉ
 }
 ```
 
@@ -427,30 +519,41 @@ Sau khi hoàn thành các bước trên, bạn sẽ có:
 
 - ✅ Chaincode đã được deploy lên Fabric network
 - ✅ Backend API server chạy trên port 3007
-- ✅ Frontend React app chạy trên port 8007
+- ✅ Frontend React app chạy trên port 3001
 - ✅ Hệ thống quản lý hồ sơ cán bộ hoàn chỉnh trên blockchain
 
 ## Cấu trúc thư mục cuối cùng trên VMHyper
 
 ```
 /fabric-samples/
-├── qlhscb/                    
-│   └── javascript/
-│       ├── qlhscb.js
-│       ├── index.js
-│       └── package.json
+├── chaincode/
+│   └── qlhscb/
+│       └── javascript/
+│           ├── qlhscb.js
+│           ├── index.js
+│           └── package.json
 
 ~/qlhscb/
-├── qlhscb-backend/            # Backend API Server
+├── backend_qlhscb/            # Backend API Server
 │   ├── server.js
 │   ├── enrollAdmin.js
 │   ├── registerUser.js
 │   ├── package.json
+│   ├── .env
 │   └── wallet/
-└── "qlhscb-frontend/"         # frontend
+└── frontend_qlhscb/            # Frontend
     ├── src/
     │   ├── components/
-    │   │   └── HoSoCanBoTable.js
+    │   │   ├── Dashboard.js
+    │   │   ├── ForgotPassword.js
+    │   │   ├── ResetPassword.js
+    │   │   ├── Login.js
+    │   │   ├── Register.js
+    │   │   ├── Navigation.js
+    │   │   ├── HoSoCanBoTable.js
+    │   │   ├── UserManagement.js
+    │   │   ├── ReportPage.js
+    │   │   └── AccountPage.js
     │   ├── services/
     │   │   └── api.js
     │   ├── App.js
@@ -458,17 +561,27 @@ Sau khi hoàn thành các bước trên, bạn sẽ có:
     │   └── index.js
     ├── public/
     │   └── index.html
-    └── package.json
+    ├── package.json
+    └── .env
 ```
 
 ## Lưu ý quan trọng
 
-1. **Vị trí chaincode:** Có thể đặt tại `/fabric-samples/qlhscb/` (theo tài liệu) hoặc `/fabric-samples/chaincode/qlhscb/`
+1. **Vị trí chaincode:** Có thể đặt tại `/fabric-samples/chaincode/qlhscb/` hoặc `~/qlcay/chaincode_qlhscb/`
 2. **Lệnh deploy:** Phải khớp với vị trí chaincode:
-   - Nếu tại `/fabric-samples/qlhscb/`: `-ccp ../qlhscb/`
-   - Nếu tại `/fabric-samples/chaincode/qlhscb/`: `-ccp ../chaincode/qlhscb/`
-3. **Backend và Frontend:** Nên đặt trong thư mục `~/qlhscb/` để dễ quản lý
+   - Nếu tại `/fabric-samples/chaincode/qlhscb/`: `-ccp ../chaincode/qlhscb/javascript`
+   - Nếu tại `~/qlcay/chaincode_qlhscb/`: `-ccp ~/qlcay/chaincode_qlhscb/javascript`
+3. **Backend và Frontend:** Nên đặt trong thư mục `~/qlhscb/` hoặc `~/qlcay/` để dễ quản lý
 4. **Tên chaincode:** Luôn là `qlhscb` (không có dấu gạch ngang) khi deploy
+5. **Port:** Backend chạy trên port 3007, Frontend chạy trên port 3001
+6. **Theme:** Xanh dương/Tím (#667eea, #764ba2) - Khác với QLCayTrong (xanh lá)
+
+## So Sánh 3 Hệ Thống
+
+| Hệ thống | Theme | Port Backend | Port Frontend | Chaincode Name | Icon |
+|----------|-------|--------------|---------------|----------------|------|
+| QLCayTrong | Xanh lá | 3006 | 3000 | qlcaytrong | 🌳 |
+| QLHSCB | Xanh dương/Tím | 3007 | 3001 | qlhscb | 👔 |
+| QLThuocTay | Cam/Đỏ | 3008 | 3002 | thuoctay | 💊 |
 
 Chúc bạn thành công! 👔
-

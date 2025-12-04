@@ -11,6 +11,12 @@ const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const XLSX = require('xlsx');
+const PDFDocument = require('pdfkit');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
+const cron = require('node-cron');
 
 const app = express();
 const PORT = process.env.PORT || 3007;
@@ -37,6 +43,48 @@ const authenticateToken = (req, res, next) => {
         next();
     });
 };
+
+// Role-based authorization middleware
+const authorize = (...roles) => {
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Chưa đăng nhập' });
+        }
+        if (!roles.includes(req.user.role)) {
+            return res.status(403).json({ error: 'Không có quyền truy cập' });
+        }
+        next();
+    };
+};
+
+// Guest access (optional authentication)
+const optionalAuth = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (token) {
+        jwt.verify(token, JWT_SECRET, (err, user) => {
+            if (!err) {
+                req.user = user;
+            }
+        });
+    }
+    next();
+};
+
+// Email configuration
+const emailTransporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: process.env.SMTP_PORT || 587,
+    secure: false,
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+    }
+});
+
+// Multer configuration for file upload
+const upload = multer({ dest: 'uploads/' });
 
 // Connection profile path
 const ccpPath = process.env.CCP_PATH || path.resolve('/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/connection-org1.json');
@@ -335,7 +383,7 @@ app.post('/api/auth/register', async (req, res) => {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        await contract.submitTransaction('createUser', username, hashedPassword, fullName, email, role || 'user');
+        await contract.submitTransaction('createUser', username, hashedPassword, fullName, email, req.body.phone || '', role || 'user');
         
         if (gateway) {
             await gateway.disconnect();
@@ -567,6 +615,375 @@ app.delete('/api/users/:username', authenticateToken, async (req, res) => {
     }
 });
 
+// ============ PASSWORD RESET ENDPOINTS ============
+
+// Forgot password
+app.post('/api/auth/forgot-password', async (req, res) => {
+    try {
+        const { email, phone } = req.body;
+        if (!email && !phone) {
+            return res.status(400).json({ error: 'Thiếu email hoặc số điện thoại' });
+        }
+
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlhscb');
+
+        const allUsers = JSON.parse(await contract.evaluateTransaction('getAllUsers'));
+        const user = allUsers.find(u => 
+            (email && u.Record.email === email) || 
+            (phone && u.Record.phone === phone)
+        );
+        
+        if (!user) {
+            await gateway.disconnect();
+            return res.status(404).json({ error: 'Email hoặc số điện thoại không tồn tại' });
+        }
+
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 3600000).toISOString();
+
+        await contract.submitTransaction('createResetToken', user.Record.username, resetToken, expiresAt);
+        await gateway.disconnect();
+
+        // Send email/SMS (if configured)
+        if (process.env.SMTP_USER && process.env.SMTP_PASS && email) {
+            const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/reset-password?token=${resetToken}`;
+            await emailTransporter.sendMail({
+                from: process.env.SMTP_USER,
+                to: email,
+                subject: 'Đặt lại mật khẩu - QLHSCB',
+                html: `
+                    <h2>Đặt lại mật khẩu</h2>
+                    <p>Bạn đã yêu cầu đặt lại mật khẩu. Vui lòng click vào link sau:</p>
+                    <a href="${resetUrl}">${resetUrl}</a>
+                    <p>Link này sẽ hết hạn sau 1 giờ.</p>
+                `
+            });
+        }
+
+        res.json({ 
+            success: true, 
+            message: 'Email/SMS đặt lại mật khẩu đã được gửi',
+            token: resetToken
+        });
+    } catch (error) {
+        console.error(`Error in forgot password: ${error.message || 'Forgot password failed'}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Reset password
+app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+        if (!token || !newPassword) {
+            return res.status(400).json({ error: 'Thiếu token hoặc mật khẩu mới' });
+        }
+
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlhscb');
+
+        const tokenData = JSON.parse(await contract.evaluateTransaction('getResetToken', token));
+        
+        if (new Date(tokenData.expiresAt) < new Date()) {
+            await gateway.disconnect();
+            return res.status(400).json({ error: 'Token đã hết hạn' });
+        }
+        if (tokenData.used) {
+            await gateway.disconnect();
+            return res.status(400).json({ error: 'Token đã được sử dụng' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await contract.submitTransaction('updateUserPassword', tokenData.username, hashedPassword);
+        await contract.submitTransaction('markResetTokenUsed', token);
+        await gateway.disconnect();
+
+        res.json({ success: true, message: 'Đặt lại mật khẩu thành công' });
+    } catch (error) {
+        console.error(`Error resetting password: ${error.message || 'Reset password failed'}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Change password
+app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ error: 'Thiếu mật khẩu hiện tại hoặc mật khẩu mới' });
+        }
+
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlhscb');
+
+        const userResult = await contract.evaluateTransaction('getUser', req.user.username);
+        const user = JSON.parse(userResult.toString());
+        
+        const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+        if (!isValidPassword) {
+            await gateway.disconnect();
+            return res.status(401).json({ error: 'Mật khẩu hiện tại không đúng' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await contract.submitTransaction('updateUserPassword', req.user.username, hashedPassword);
+        await gateway.disconnect();
+
+        res.json({ success: true, message: 'Đổi mật khẩu thành công' });
+    } catch (error) {
+        console.error(`Error changing password: ${error.message || 'Change password failed'}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Verify email
+app.post('/api/auth/verify-email', authenticateToken, async (req, res) => {
+    try {
+        const { token } = req.body;
+        if (!token) {
+            return res.status(400).json({ error: 'Thiếu token' });
+        }
+
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlhscb');
+
+        await contract.submitTransaction('verifyEmail', req.user.username);
+        await gateway.disconnect();
+
+        res.json({ success: true, message: 'Email đã được xác thực' });
+    } catch (error) {
+        console.error(`Error verifying email: ${error.message || 'Email verification failed'}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Verify phone
+app.post('/api/auth/verify-phone', authenticateToken, async (req, res) => {
+    try {
+        const { otp } = req.body;
+        if (!otp) {
+            return res.status(400).json({ error: 'Thiếu OTP' });
+        }
+
+        // In production, verify OTP from SMS service
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlhscb');
+
+        await contract.submitTransaction('verifyPhone', req.user.username);
+        await gateway.disconnect();
+
+        res.json({ success: true, message: 'Số điện thoại đã được xác thực' });
+    } catch (error) {
+        console.error(`Error verifying phone: ${error.message || 'Phone verification failed'}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============ SEARCH & FILTER ENDPOINTS ============
+
+// Search ho so can bo (full-text)
+app.get('/api/hosocanbo/search', optionalAuth, async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q) {
+            return res.status(400).json({ error: 'Thiếu từ khóa tìm kiếm' });
+        }
+
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlhscb');
+
+        const result = await contract.evaluateTransaction('searchHoSoCanBo', q);
+        await gateway.disconnect();
+
+        const hosocanbos = JSON.parse(result.toString());
+        res.json({ success: true, data: hosocanbos });
+    } catch (error) {
+        console.error(`Error searching ho so can bo: ${error.message || 'Search failed'}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Filter ho so can bo (multiple criteria)
+app.get('/api/hosocanbo/filter', optionalAuth, async (req, res) => {
+    try {
+        const { phongBan, chucVu, trinhDo } = req.query;
+
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlhscb');
+
+        const result = await contract.evaluateTransaction('filterHoSoCanBo', 
+            phongBan || '', 
+            chucVu || '', 
+            trinhDo || ''
+        );
+        await gateway.disconnect();
+
+        const hosocanbos = JSON.parse(result.toString());
+        res.json({ success: true, data: hosocanbos });
+    } catch (error) {
+        console.error(`Error filtering ho so can bo: ${error.message || 'Filter failed'}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============ IMPORT/EXPORT ENDPOINTS ============
+
+// Export to Excel
+app.get('/api/hosocanbo/export/excel', authenticateToken, async (req, res) => {
+    try {
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlhscb');
+
+        const result = await contract.evaluateTransaction('queryAllHoSoCanBo');
+        const allHoSoCanBo = JSON.parse(result.toString());
+        await gateway.disconnect();
+
+        const hosocanbos = allHoSoCanBo.filter(item => item.Record.docType === 'hosocanbo');
+        const data = hosocanbos.map(item => ({
+            'Mã cán bộ': item.Record.maCanBo,
+            'Họ tên': item.Record.hoTen,
+            'Ngày sinh': item.Record.ngaySinh,
+            'Giới tính': item.Record.gioiTinh,
+            'Chức vụ': item.Record.chucVu,
+            'Phòng ban': item.Record.phongBan,
+            'Ngày vào làm': item.Record.ngayVaoLam,
+            'Trình độ': item.Record.trinhDo,
+            'Lương (VND)': item.Record.luong,
+            'Địa chỉ': item.Record.diaChi
+        }));
+
+        const workbook = XLSX.utils.book_new();
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Hồ Sơ Cán Bộ');
+        
+        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+        
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=ho-so-can-bo-${new Date().toISOString().split('T')[0]}.xlsx`);
+        res.send(buffer);
+    } catch (error) {
+        console.error(`Error exporting to Excel: ${error.message || 'Export failed'}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Export to PDF
+app.get('/api/hosocanbo/export/pdf', authenticateToken, async (req, res) => {
+    try {
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlhscb');
+
+        const result = await contract.evaluateTransaction('queryAllHoSoCanBo');
+        const allHoSoCanBo = JSON.parse(result.toString());
+        await gateway.disconnect();
+
+        const hosocanbos = allHoSoCanBo.filter(item => item.Record.docType === 'hosocanbo');
+
+        const doc = new PDFDocument();
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=ho-so-can-bo-${new Date().toISOString().split('T')[0]}.pdf`);
+        
+        doc.pipe(res);
+        doc.fontSize(20).text('Báo Cáo Hồ Sơ Cán Bộ', { align: 'center' });
+        doc.moveDown();
+        doc.fontSize(12).text(`Ngày xuất: ${new Date().toLocaleString('vi-VN')}`, { align: 'center' });
+        doc.moveDown(2);
+
+        hosocanbos.forEach((item, index) => {
+            const record = item.Record;
+            doc.fontSize(14).text(`${index + 1}. ${record.hoTen} (${record.maCanBo})`, { underline: true });
+            doc.fontSize(10);
+            doc.text(`   Chức vụ: ${record.chucVu}`);
+            doc.text(`   Phòng ban: ${record.phongBan}`);
+            doc.text(`   Trình độ: ${record.trinhDo}`);
+            doc.text(`   Lương: ${record.luong.toLocaleString('vi-VN')} VND`);
+            doc.text(`   Ngày vào làm: ${record.ngayVaoLam}`);
+            doc.moveDown();
+        });
+
+        doc.end();
+    } catch (error) {
+        console.error(`Error exporting to PDF: ${error.message || 'Export failed'}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Import from Excel/CSV
+app.post('/api/hosocanbo/import', authenticateToken, authorize('admin', 'manager'), upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Không có file được upload' });
+        }
+
+        const workbook = XLSX.readFile(req.file.path);
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(worksheet);
+
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlhscb');
+
+        const results = { success: [], errors: [] };
+
+        for (const row of data) {
+            try {
+                await contract.submitTransaction(
+                    'createHoSoCanBo',
+                    row['Mã cán bộ'] || row.maCanBo,
+                    row['Họ tên'] || row.hoTen,
+                    row['Ngày sinh'] || row.ngaySinh,
+                    row['Giới tính'] || row.gioiTinh,
+                    row['Chức vụ'] || row.chucVu,
+                    row['Phòng ban'] || row.phongBan,
+                    row['Ngày vào làm'] || row.ngayVaoLam,
+                    row['Trình độ'] || row.trinhDo,
+                    (row['Lương (VND)'] || row.luong || 0).toString(),
+                    row['Địa chỉ'] || row.diaChi
+                );
+                results.success.push(row['Mã cán bộ'] || row.maCanBo);
+            } catch (error) {
+                results.errors.push({
+                    row: row['Mã cán bộ'] || row.maCanBo,
+                    error: error.message
+                });
+            }
+        }
+
+        await gateway.disconnect();
+        fs.unlinkSync(req.file.path);
+
+        res.json({
+            success: true,
+            message: `Import thành công ${results.success.length} bản ghi, ${results.errors.length} lỗi`,
+            results
+        });
+    } catch (error) {
+        console.error(`Error importing: ${error.message || 'Import failed'}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ============ REPORT ENDPOINTS ============
 
 // Generate report
@@ -653,6 +1070,131 @@ app.get('/api/reports', authenticateToken, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+// Save report
+app.post('/api/reports', authenticateToken, async (req, res) => {
+    try {
+        const reportId = `RPT_${Date.now()}_${req.user.username}`;
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlhscb');
+
+        const result = await contract.evaluateTransaction('queryAllHoSoCanBo');
+        const allHoSoCanBo = JSON.parse(result.toString());
+        const hosocanbos = allHoSoCanBo.filter(item => item.Record.docType === 'hosocanbo');
+
+        const stats = {
+            totalCanBo: hosocanbos.length,
+            totalLuong: hosocanbos.reduce((sum, item) => sum + parseFloat(item.Record.luong || 0), 0),
+            avgLuong: hosocanbos.length > 0 
+                ? hosocanbos.reduce((sum, item) => sum + parseFloat(item.Record.luong || 0), 0) / hosocanbos.length 
+                : 0,
+            byPhongBan: {},
+            byChucVu: {},
+            byTrinhDo: {},
+            byGioiTinh: {}
+        };
+
+        hosocanbos.forEach(item => {
+            const phongBan = item.Record.phongBan;
+            if (!stats.byPhongBan[phongBan]) {
+                stats.byPhongBan[phongBan] = { count: 0, totalLuong: 0 };
+            }
+            stats.byPhongBan[phongBan].count++;
+            stats.byPhongBan[phongBan].totalLuong += parseFloat(item.Record.luong || 0);
+        });
+
+        hosocanbos.forEach(item => {
+            const chucVu = item.Record.chucVu;
+            if (!stats.byChucVu[chucVu]) {
+                stats.byChucVu[chucVu] = 0;
+            }
+            stats.byChucVu[chucVu]++;
+        });
+
+        hosocanbos.forEach(item => {
+            const trinhDo = item.Record.trinhDo;
+            if (!stats.byTrinhDo[trinhDo]) {
+                stats.byTrinhDo[trinhDo] = 0;
+            }
+            stats.byTrinhDo[trinhDo]++;
+        });
+
+        hosocanbos.forEach(item => {
+            const gioiTinh = item.Record.gioiTinh;
+            if (!stats.byGioiTinh[gioiTinh]) {
+                stats.byGioiTinh[gioiTinh] = 0;
+            }
+            stats.byGioiTinh[gioiTinh]++;
+        });
+
+        const reportData = {
+            generatedAt: new Date().toISOString(),
+            generatedBy: req.user.username,
+            statistics: stats,
+            data: hosocanbos
+        };
+
+        await contract.submitTransaction('saveReport', reportId, JSON.stringify(reportData));
+        await gateway.disconnect();
+
+        res.json({ success: true, reportId, report: reportData });
+    } catch (error) {
+        console.error(`Error saving report: ${error.message || 'Save report failed'}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get report history
+app.get('/api/reports/history', authenticateToken, async (req, res) => {
+    try {
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlhscb');
+
+        const result = await contract.evaluateTransaction('getAllReports');
+        const reports = JSON.parse(result.toString());
+        await gateway.disconnect();
+
+        res.json({ success: true, data: reports });
+    } catch (error) {
+        console.error(`Error getting report history: ${error.message || 'Get report history failed'}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get specific report
+app.get('/api/reports/:reportId', authenticateToken, async (req, res) => {
+    try {
+        const { reportId } = req.params;
+        const userName = process.env.USER_NAME || 'appUser';
+        const gateway = await getGateway(userName);
+        const network = await gateway.getNetwork('mychannel');
+        const contract = network.getContract('qlhscb');
+
+        const result = await contract.evaluateTransaction('getReport', reportId);
+        const report = JSON.parse(result.toString());
+        await gateway.disconnect();
+
+        res.json({ success: true, data: report });
+    } catch (error) {
+        console.error(`Error getting report: ${error.message || 'Get report failed'}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Scheduled report generation
+if (process.env.ENABLE_SCHEDULED_REPORTS === 'true') {
+    cron.schedule('0 0 * * *', async () => {
+        try {
+            console.log('Generating daily report for QLHSCB...');
+        } catch (error) {
+            console.error('Error generating scheduled report:', error);
+        }
+    });
+}
 
 // Start server
 app.listen(PORT, () => {
