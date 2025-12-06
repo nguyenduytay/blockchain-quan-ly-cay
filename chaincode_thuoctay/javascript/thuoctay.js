@@ -249,13 +249,16 @@ class QLThuocTay extends Contract {
 
     // ============ USER MANAGEMENT FUNCTIONS ============
     
-    async createUser(ctx, username, password, fullName, email, phone, role) {
+    async createUser(ctx, username, password, fullName, email, phone, role, timestamp) {
         console.info('============= START : Tao User Moi ===========');
         const userKey = `USER_${username}`;
         const exists = await ctx.stub.getState(userKey);
         if (exists && exists.length > 0) {
             throw new Error(`User ${username} da ton tai`);
         }
+
+        // Sử dụng timestamp từ backend để đảm bảo deterministic
+        const createdAt = timestamp || new Date().toISOString();
 
         const user = {
             docType: 'user',
@@ -267,7 +270,7 @@ class QLThuocTay extends Contract {
             role: role || 'user',
             emailVerified: false,
             phoneVerified: false,
-            createdAt: new Date().toISOString(),
+            createdAt: createdAt,
             isActive: true
         };
 

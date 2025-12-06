@@ -484,35 +484,119 @@ app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, password, fullName, email, phone, role } = req.body;
 
+        console.log(`[DEBUG] [REGISTER] Received registration request:`);
+        console.log(`  Username: ${username}`);
+        console.log(`  FullName: ${fullName}`);
+        console.log(`  Email: ${email}`);
+        console.log(`  Role: ${role || 'user'}`);
+
         if (!username || !password || !fullName || !email) {
             return res.status(400).json({ error: 'Thiếu thông tin bắt buộc' });
         }
 
         const userName = process.env.USER_NAME || 'appUser';
+        console.log(`[DEBUG] [REGISTER] Using identity: ${userName}`);
+        
         gateway = await getGateway(userName);
+        console.log(`[DEBUG] [REGISTER] Gateway obtained successfully`);
+        
         const network = await gateway.getNetwork('mychannel');
+        console.log(`[DEBUG] [REGISTER] Network 'mychannel' obtained`);
+        
         const contract = network.getContract('thuoctay');
+        console.log(`[DEBUG] [REGISTER] Contract 'thuoctay' obtained`);
 
+        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
-        await contract.submitTransaction('createUser', username, hashedPassword, fullName, email, phone || '', role || 'user');
+        console.log(`[DEBUG] [REGISTER] Password hashed`);
+        
+        // Tạo timestamp để đảm bảo deterministic trong chaincode (nếu chaincode hỗ trợ)
+        const timestamp = new Date().toISOString();
+        console.log(`[DEBUG] [REGISTER] Timestamp: ${timestamp}`);
+
+        console.log(`[DEBUG] [REGISTER] Submitting transaction createUser...`);
+        console.log(`[DEBUG] [REGISTER] Transaction parameters:`);
+        console.log(`  - username: ${username}`);
+        console.log(`  - hashedPassword: ${hashedPassword.substring(0, 20)}...`);
+        console.log(`  - fullName: ${fullName}`);
+        console.log(`  - email: ${email}`);
+        console.log(`  - phone: ${phone || ''}`);
+        console.log(`  - role: ${role || 'user'}`);
+        console.log(`  - timestamp: ${timestamp}`);
+
+        await contract.submitTransaction('createUser', username, hashedPassword, fullName, email, phone || '', role || 'user', timestamp);
+        
+        console.log(`[DEBUG] [REGISTER] Transaction submitted successfully!`);
         
         if (gateway) {
             await gateway.disconnect();
+            console.log(`[DEBUG] [REGISTER] Gateway disconnected`);
         }
         res.json({ success: true, message: 'Đăng ký thành công' });
     } catch (error) {
-        console.error(`[REGISTER] Error:`, error.message || 'Registration failed');
+        console.error(`[REGISTER] Error registering user:`, error.message || 'Registration failed');
+        
+        // Log chi tiết lỗi
+        console.error(`[DEBUG] [REGISTER] Full error details:`);
+        console.error(`  Error name: ${error.name || 'N/A'}`);
+        console.error(`  Error message: ${error.message || 'N/A'}`);
+        if (error.stack) {
+            console.error(`  Stack trace:`);
+            console.error(error.stack);
+        }
+        if (error.errors) {
+            console.error(`  Errors array:`, JSON.stringify(error.errors, null, 2));
+        }
+        if (error.cause) {
+            console.error(`  Cause:`, JSON.stringify(error.cause, null, 2));
+        }
+        
+        // Log peer info nếu có
+        if (ccp.peers) {
+            console.error(`[DEBUG] [REGISTER] Available peers in connection profile:`);
+            Object.keys(ccp.peers).forEach(peerName => {
+                const peer = ccp.peers[peerName];
+                console.error(`  - ${peerName}:`);
+                console.error(`    URL: ${peer.url || 'N/A'}`);
+                console.error(`    Event URL: ${peer.eventUrl || 'N/A'}`);
+            });
+        }
+        
+        // Log network status
+        console.error(`[DEBUG] [REGISTER] Network status check:`);
+        console.error(`  - Channel: mychannel`);
+        console.error(`  - Chaincode: thuoctay`);
+        console.error(`  - Identity: ${process.env.USER_NAME || 'appUser'}`);
+        
         if (gateway) {
             try {
                 await gateway.disconnect();
+                console.log(`[DEBUG] [REGISTER] Gateway disconnected after error`);
             } catch (disconnectError) {
-                console.error(`[REGISTER] Error disconnecting:`, disconnectError.message);
+                console.error(`[REGISTER] Error disconnecting gateway:`, disconnectError.message || 'Disconnect failed');
             }
         }
+
+        // Xử lý các lỗi cụ thể
         let errorMessage = error.message || 'Đăng ký thất bại';
-        if (errorMessage.includes('da ton tai')) {
-            errorMessage = `Tên đăng nhập "${req.body.username}" đã tồn tại.`;
+        
+        if (errorMessage.includes('No valid responses from any peers')) {
+            errorMessage = `Lỗi: Không nhận được phản hồi từ peers.\n` +
+                `Vui lòng kiểm tra:\n` +
+                `1. Network: docker ps | grep peer (phải thấy peer0.org1 và peer0.org2)\n` +
+                `2. Chaincode: docker ps | grep thuoctay (phải thấy 2 containers)\n` +
+                `3. Wallet: ls -la wallet/ (phải thấy admin/ và appUser/)\n` +
+                `4. Xem log chi tiết ở trên để biết thêm thông tin.`;
+        } else if (errorMessage.includes('Peer endorsements do not match')) {
+            errorMessage = 'Lỗi blockchain: Chaincode chưa được deploy đúng hoặc network chưa chạy. Vui lòng kiểm tra lại.';
+        } else if (errorMessage.includes('chaincode') || errorMessage.includes('chaincode name')) {
+            errorMessage = 'Lỗi: Chaincode chưa được deploy. Chạy: cd /fabric-samples/test-network && ./network.sh deployCC -ccn thuoctay -ccp ../chaincode/thuoctay/javascript -ccl javascript';
+        } else if (errorMessage.includes('network') || errorMessage.includes('channel')) {
+            errorMessage = 'Lỗi: Network chưa được khởi động. Chạy: cd /fabric-samples/test-network && ./network.sh up';
+        } else if (errorMessage.includes('da ton tai')) {
+            errorMessage = `Tên đăng nhập "${req.body.username}" đã tồn tại. Vui lòng chọn tên khác.`;
         }
+
         res.status(500).json({ error: errorMessage });
     }
 });
