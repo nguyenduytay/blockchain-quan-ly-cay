@@ -53,20 +53,55 @@ docker ps | grep qlhscb
 docker exec -it cli bash
 ```
 
-**Bước 2: Thiết lập biến môi trường cho Org1**
+**Bước 2: Kiểm tra đường dẫn MSP trong container**
 
 ```bash
-# Thiết lập cho peer0.org1
-export CORE_PEER_TLS_ENABLED=true
-export CORE_PEER_LOCALMSPID="Org1MSP"
-export CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
-export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
-export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
+# Kiểm tra các đường dẫn có thể
+ls -la /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ 2>/dev/null
+ls -la /etc/hyperledger/fabric/peer/crypto/ 2>/dev/null
+ls -la /fabric-samples/test-network/organizations/ 2>/dev/null
+
+# Hoặc tìm kiếm file MSP
+find / -name "msp" -type d 2>/dev/null | grep org1
 ```
 
-**Bước 3: Kiểm tra chaincode**
+**Bước 3: Thiết lập biến môi trường cho Org1 (sau khi tìm được đường dẫn đúng)**
 
 ```bash
+# Cách 1: Nếu đường dẫn là /fabric-samples/test-network/organizations/
+export CORE_PEER_TLS_ENABLED=true
+export CORE_PEER_LOCALMSPID="Org1MSP"
+export CORE_PEER_TLS_ROOTCERT_FILE=/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
+export CORE_PEER_MSPCONFIGPATH=/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
+
+# Cách 2: Nếu đường dẫn là /opt/gopath/... (kiểm tra trước)
+# export CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
+# export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+```
+
+**Kiểm tra đường dẫn có đúng không:**
+
+```bash
+# Kiểm tra MSP path
+ls $CORE_PEER_MSPCONFIGPATH
+
+# Phải thấy các file:
+# - admincerts/
+# - cacerts/
+# - keystore/
+# - signcerts/
+```
+
+**Bước 4: Kiểm tra chaincode (sau khi thiết lập đúng)**
+
+```bash
+# Kiểm tra biến môi trường
+echo "MSPID: $CORE_PEER_LOCALMSPID"
+echo "ADDRESS: $CORE_PEER_ADDRESS"
+echo "MSP PATH: $CORE_PEER_MSPCONFIGPATH"
+
+# Kiểm tra chaincode
 peer lifecycle chaincode querycommitted -C mychannel --name qlhscb
 ```
 
@@ -83,10 +118,52 @@ export CORE_PEER_ADDRESS=peer0.org2.example.com:9051
 peer lifecycle chaincode querycommitted -C mychannel --name qlhscb
 ```
 
-**Bước 4: Thoát khỏi container**
+**Bước 5: Thoát khỏi container**
 
 ```bash
 exit
+```
+
+### ⚠️ Lưu Ý: Nếu Container CLI Không Có Đường Dẫn MSP
+
+Nếu container cli không mount đúng volume, bạn có thể:
+
+**Cách 1: Sử dụng đường dẫn từ host (nếu được mount)**
+
+```bash
+# Kiểm tra xem có mount /fabric-samples không
+ls /fabric-samples/test-network/organizations/
+
+# Nếu có, dùng đường dẫn này
+export CORE_PEER_TLS_ENABLED=true
+export CORE_PEER_LOCALMSPID="Org1MSP"
+export CORE_PEER_TLS_ROOTCERT_FILE=/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
+export CORE_PEER_MSPCONFIGPATH=/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
+```
+
+**Cách 2: Sử dụng peer container trực tiếp (Khuyến nghị)**
+
+Thay vì dùng container cli, dùng trực tiếp peer container:
+
+```bash
+# Thoát khỏi cli
+exit
+
+# Kiểm tra chaincode trực tiếp từ peer container
+docker exec peer0.org1.example.com peer lifecycle chaincode querycommitted -C mychannel --name qlhscb
+```
+
+**Cách 3: Kiểm tra bằng docker ps (Đơn giản nhất)**
+
+```bash
+# Thoát khỏi cli
+exit
+
+# Kiểm tra chaincode container đang chạy
+docker ps | grep qlhscb
+
+# Nếu thấy 2 containers chaincode → Chaincode đã được deploy
 ```
 
 ### Cách 3: Kiểm tra bằng peer command trên host (Nếu container cli không hoạt động)
