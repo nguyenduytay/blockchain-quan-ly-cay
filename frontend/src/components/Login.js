@@ -136,7 +136,7 @@ function Login({ onLogin }) {
 
             <div className="login-footer">
               <p className="text-muted small">
-                Chưa có tài khoản? <a href="#" onClick={(e) => { e.preventDefault(); if (window.showRegister) window.showRegister(); }}>Đăng ký ngay</a>
+                Chưa có tài khoản? <Link to="/register" className="text-decoration-none">Đăng ký ngay</Link>
               </p>
               <p className="text-muted small mt-2">
                 Powered by Hyperledger Fabric & React.js

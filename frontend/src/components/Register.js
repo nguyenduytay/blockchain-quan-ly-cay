@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Container, Card, Form, Button, Alert } from 'react-bootstrap';
 import { authAPI } from '../services/api';
 import './Login.css';
 
 function Register({ onRegisterSuccess }) {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     username: '',
     password: '',
     confirmPassword: '',
     fullName: '',
     email: '',
+    phone: '',
     role: 'user'
   });
   const [error, setError] = useState(null);
@@ -42,11 +45,12 @@ function Register({ onRegisterSuccess }) {
         password: formData.password,
         fullName: formData.fullName,
         email: formData.email,
+        phone: formData.phone || '',
         role: formData.role
       });
       
       if (response && response.data && response.data.success) {
-        setSuccess('Đăng ký thành công! Bạn có thể đăng nhập ngay bây giờ.');
+        setSuccess('Đăng ký thành công! Đang chuyển đến trang đăng nhập...');
         // Reset form
         setFormData({
           username: '',
@@ -54,15 +58,14 @@ function Register({ onRegisterSuccess }) {
           confirmPassword: '',
           fullName: '',
           email: '',
+          phone: '',
           role: 'user'
         });
         
-        // Callback để chuyển về trang login sau 2 giây
-        if (onRegisterSuccess) {
-          setTimeout(() => {
-            onRegisterSuccess();
-          }, 2000);
-        }
+        // Chuyển về trang login sau 2 giây
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
       } else {
         throw new Error('Phản hồi từ server không hợp lệ');
       }
@@ -159,6 +162,16 @@ function Register({ onRegisterSuccess }) {
               </Form.Group>
 
               <Form.Group className="mb-3">
+                <Form.Label>Số điện thoại</Form.Label>
+                <Form.Control
+                  type="tel"
+                  placeholder="Nhập số điện thoại (tùy chọn)"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                />
+              </Form.Group>
+
+              <Form.Group className="mb-3">
                 <Form.Label>Mật khẩu *</Form.Label>
                 <Form.Control
                   type="password"
@@ -207,7 +220,7 @@ function Register({ onRegisterSuccess }) {
 
             <div className="login-footer">
               <p className="text-muted small">
-                Đã có tài khoản? <a href="#" onClick={(e) => { e.preventDefault(); onRegisterSuccess(); }}>Đăng nhập ngay</a>
+                Đã có tài khoản? <Link to="/login" className="text-decoration-none">Đăng nhập ngay</Link>
               </p>
             </div>
           </Card.Body>

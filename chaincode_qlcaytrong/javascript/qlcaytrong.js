@@ -203,7 +203,7 @@ class QLCayTrong extends Contract {
 
     // ============ USER MANAGEMENT FUNCTIONS ============
     
-    async createUser(ctx, username, password, fullName, email, role) {
+    async createUser(ctx, username, password, fullName, email, phone, role, timestamp) {
         console.info('============= START : Tao User Moi ===========');
         const userKey = `USER_${username}`;
         const exists = await ctx.stub.getState(userKey);
@@ -211,14 +211,20 @@ class QLCayTrong extends Contract {
             throw new Error(`User ${username} da ton tai`);
         }
 
+        // Sử dụng timestamp từ backend để đảm bảo deterministic
+        const createdAt = timestamp || new Date().toISOString();
+
         const user = {
             docType: 'user',
             username: username,
             password: password, // Trong thuc te nen hash password
             fullName: fullName,
             email: email,
+            phone: phone || '',
             role: role || 'user',
-            createdAt: new Date().toISOString(),
+            emailVerified: false,
+            phoneVerified: false,
+            createdAt: createdAt,
             isActive: true
         };
 
