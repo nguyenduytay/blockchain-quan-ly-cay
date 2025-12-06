@@ -338,7 +338,7 @@ function ThuocTayTable() {
             <Card.Body>
               <div className="stat-icon">📦</div>
               <Card.Title style={{ color: 'white' }}>Tổng số lượng</Card.Title>
-              <Card.Text className="h3 stat-number" style={{ color: 'white' }}>{stats.totalSoLuong.toLocaleString()}</Card.Text>
+              <Card.Text className="h3 stat-number" style={{ color: 'white' }}>{(stats.totalSoLuong || 0).toLocaleString('vi-VN')}</Card.Text>
             </Card.Body>
           </Card>
         </Col>
@@ -505,8 +505,8 @@ function ThuocTayTable() {
                         )}
                       </td>
                       <td>{record.donVi}</td>
-                      <td>{record.soLuong.toLocaleString()}</td>
-                      <td>{record.giaBan.toLocaleString()}</td>
+                      <td>{record.soLuong ? record.soLuong.toLocaleString('vi-VN') : '0'}</td>
+                      <td>{record.giaBan ? record.giaBan.toLocaleString('vi-VN') : '0'}</td>
                       <td>{record.loaiThuoc}</td>
                       <td>
                         <div className="d-flex gap-1 flex-wrap action-buttons-row">

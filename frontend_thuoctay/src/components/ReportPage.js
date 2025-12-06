@@ -37,7 +37,7 @@ function ReportPage() {
     csv += 'THỐNG KÊ TỔNG QUAN\n';
     csv += `Tổng số thuốc,${stats.totalThuocTay}\n`;
     csv += `Tổng số lượng,${stats.totalSoLuong}\n`;
-    csv += `Tổng giá trị (VND),${stats.totalGiaTri.toLocaleString('vi-VN')}\n\n`;
+    csv += `Tổng giá trị (VND),${(stats.totalGiaTri || 0).toLocaleString('vi-VN')}\n\n`;
     
     csv += 'THỐNG KÊ THEO LOẠI THUỐC\n';
     csv += 'Loại thuốc,Số lượng,Số lượng tổng\n';
@@ -167,7 +167,7 @@ function ReportPage() {
               <Card className="stat-card stat-success">
                 <Card.Body>
                   <div className="stat-icon">📦</div>
-                  <Card.Title className="stat-value">{report.statistics.totalSoLuong.toLocaleString('vi-VN')}</Card.Title>
+                  <Card.Title className="stat-value">{(report.statistics.totalSoLuong || 0).toLocaleString('vi-VN')}</Card.Title>
                   <Card.Text className="stat-label">Tổng số lượng</Card.Text>
                 </Card.Body>
               </Card>
@@ -217,7 +217,7 @@ function ReportPage() {
                         <tr key={loai}>
                           <td><Badge bg="danger">{loai}</Badge></td>
                           <td>{data.count}</td>
-                          <td>{data.soLuong.toLocaleString('vi-VN')}</td>
+                          <td>{(data.soLuong || 0).toLocaleString('vi-VN')}</td>
                         </tr>
                       ))}
                     </tbody>
