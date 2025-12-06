@@ -48,36 +48,101 @@ const walletPath = path.join(process.cwd(), 'wallet');
 
 // Helper function to get gateway
 async function getGateway(userName) {
+    console.log(`[DEBUG] getGateway called with userName: ${userName}`);
+    
     const wallet = await Wallets.newFileSystemWallet(walletPath);
+    console.log(`[DEBUG] Wallet path: ${walletPath}`);
+    
     const userExists = await wallet.get(userName);
     if (!userExists) {
+        console.error(`[DEBUG] User ${userName} does not exist in wallet`);
         throw new Error(`User ${userName} does not exist in wallet. Please register first.`);
     }
+    console.log(`[DEBUG] User ${userName} found in wallet`);
+
+    // Log connection profile info
+    console.log(`[DEBUG] Connection Profile Info:`);
+    console.log(`  - Organizations: ${Object.keys(ccp.organizations || {}).join(', ')}`);
+    console.log(`  - Peers: ${Object.keys(ccp.peers || {}).join(', ')}`);
+    if (ccp.peers) {
+        Object.keys(ccp.peers).forEach(peerName => {
+            const peer = ccp.peers[peerName];
+            console.log(`    - ${peerName}: ${peer.url || 'N/A'}`);
+        });
+    }
+    console.log(`  - Orderers: ${Object.keys(ccp.orderers || {}).join(', ')}`);
+    console.log(`  - Channels: ${Object.keys(ccp.channels || {}).join(', ')}`);
 
     const gateway = new Gateway();
-    const discoveryEnabled = process.env.DISCOVERY_ENABLED !== 'false';
+    
+    // Thử với discovery enabled trước (để tự động tìm tất cả peers)
+    // Nếu fail thì fallback về discovery disabled
+    let discoveryEnabled = true;
+    let lastError = null;
     
     try {
+        console.log(`[DEBUG] Attempting to connect gateway with discovery enabled (timeout 10s)...`);
         await gateway.connect(ccp, {
             wallet,
             identity: userName,
-            discovery: { enabled: discoveryEnabled, asLocalhost: true }
+            discovery: { 
+                enabled: true, 
+                asLocalhost: true,
+                timeout: 10000 // 10 giây timeout
+            }
         });
+        console.log(`[DEBUG] Gateway connected successfully with discovery enabled`);
+        return gateway;
     } catch (error) {
-        // Fallback: retry without discovery if access denied
-        if (error.message && error.message.includes('access denied') && discoveryEnabled) {
+        lastError = error;
+        console.log(`[DEBUG] Discovery connection failed: ${error.message}`);
+        console.log(`[DEBUG] Retrying with discovery disabled...`);
+        
+        // Đóng gateway cũ
+        try {
             await gateway.disconnect();
-            await gateway.connect(ccp, {
+        } catch (e) {
+            // Ignore
+        }
+        
+        // Tạo gateway mới và thử với discovery disabled
+        const gateway2 = new Gateway();
+        try {
+            await gateway2.connect(ccp, {
                 wallet,
                 identity: userName,
-                discovery: { enabled: false, asLocalhost: true }
+                discovery: { 
+                    enabled: false, 
+                    asLocalhost: true
+                }
             });
-        } else {
-            throw error;
+            console.log(`[DEBUG] Gateway connected successfully with discovery disabled`);
+            return gateway2;
+        } catch (error2) {
+            console.error(`[DEBUG] Gateway connection failed with discovery disabled:`);
+            console.error(`  Error: ${error2.message}`);
+            console.error(`  Stack: ${error2.stack}`);
+            
+            // Log chi tiết về peers
+            if (ccp.peers) {
+                console.error(`[DEBUG] Available peers in connection profile:`);
+                Object.keys(ccp.peers).forEach(peerName => {
+                    const peer = ccp.peers[peerName];
+                    console.error(`  - ${peerName}: ${peer.url || 'N/A'}`);
+                });
+            }
+            
+            // Gợi ý sửa lỗi
+            throw new Error(`Không thể kết nối với Fabric network.\n` +
+                `Lỗi discovery: ${lastError.message}\n` +
+                `Lỗi không discovery: ${error2.message}\n\n` +
+                `Vui lòng kiểm tra:\n` +
+                `1. Network có đang chạy: docker ps | grep peer (phải thấy peer0.org1 và peer0.org2)\n` +
+                `2. Chaincode đã deploy: docker ps | grep thuoctay (phải thấy 2 containers)\n` +
+                `3. Wallet có user: ls -la wallet/ (phải thấy admin/ và appUser/)\n` +
+                `4. Connection profile chỉ có 1 peer, nhưng network có 2 peers. Có thể cần bật discovery.`);
         }
     }
-
-    return gateway;
 }
 
 // Authentication middleware

@@ -109,22 +109,101 @@ const walletPath = path.join(process.cwd(), 'wallet');
 
 // Helper function to get gateway
 async function getGateway(userName) {
+    console.log(`[DEBUG] getGateway called with userName: ${userName}`);
+    
     const wallet = await Wallets.newFileSystemWallet(walletPath);
+    console.log(`[DEBUG] Wallet path: ${walletPath}`);
+    
     const userExists = await wallet.get(userName);
     if (!userExists) {
+        console.error(`[DEBUG] User ${userName} does not exist in wallet`);
         throw new Error(`User ${userName} does not exist in wallet. Please register first.`);
     }
+    console.log(`[DEBUG] User ${userName} found in wallet`);
+
+    // Log connection profile info
+    console.log(`[DEBUG] Connection Profile Info:`);
+    console.log(`  - Organizations: ${Object.keys(ccp.organizations || {}).join(', ')}`);
+    console.log(`  - Peers: ${Object.keys(ccp.peers || {}).join(', ')}`);
+    if (ccp.peers) {
+        Object.keys(ccp.peers).forEach(peerName => {
+            const peer = ccp.peers[peerName];
+            console.log(`    - ${peerName}: ${peer.url || 'N/A'}`);
+        });
+    }
+    console.log(`  - Orderers: ${Object.keys(ccp.orderers || {}).join(', ')}`);
+    console.log(`  - Channels: ${Object.keys(ccp.channels || {}).join(', ')}`);
 
     const gateway = new Gateway();
-    // Tắt discovery để tránh lỗi "Peer endorsements do not match"
-    // Discovery có thể gây lệch peer trong endorsement
-    await gateway.connect(ccp, {
-        wallet,
-        identity: userName,
-        discovery: { enabled: false, asLocalhost: true }
-    });
-
-    return gateway;
+    
+    // Thử với discovery enabled trước (để tự động tìm tất cả peers)
+    // Nếu fail thì fallback về discovery disabled
+    let discoveryEnabled = true;
+    let lastError = null;
+    
+    try {
+        console.log(`[DEBUG] Attempting to connect gateway with discovery enabled (timeout 10s)...`);
+        await gateway.connect(ccp, {
+            wallet,
+            identity: userName,
+            discovery: { 
+                enabled: true, 
+                asLocalhost: true,
+                timeout: 10000 // 10 giây timeout
+            }
+        });
+        console.log(`[DEBUG] Gateway connected successfully with discovery enabled`);
+        return gateway;
+    } catch (error) {
+        lastError = error;
+        console.log(`[DEBUG] Discovery connection failed: ${error.message}`);
+        console.log(`[DEBUG] Retrying with discovery disabled...`);
+        
+        // Đóng gateway cũ
+        try {
+            await gateway.disconnect();
+        } catch (e) {
+            // Ignore
+        }
+        
+        // Tạo gateway mới và thử với discovery disabled
+        const gateway2 = new Gateway();
+        try {
+            await gateway2.connect(ccp, {
+                wallet,
+                identity: userName,
+                discovery: { 
+                    enabled: false, 
+                    asLocalhost: true
+                }
+            });
+            console.log(`[DEBUG] Gateway connected successfully with discovery disabled`);
+            return gateway2;
+        } catch (error2) {
+            console.error(`[DEBUG] Gateway connection failed with discovery disabled:`);
+            console.error(`  Error: ${error2.message}`);
+            console.error(`  Stack: ${error2.stack}`);
+            
+            // Log chi tiết về peers
+            if (ccp.peers) {
+                console.error(`[DEBUG] Available peers in connection profile:`);
+                Object.keys(ccp.peers).forEach(peerName => {
+                    const peer = ccp.peers[peerName];
+                    console.error(`  - ${peerName}: ${peer.url || 'N/A'}`);
+                });
+            }
+            
+            // Gợi ý sửa lỗi
+            throw new Error(`Không thể kết nối với Fabric network.\n` +
+                `Lỗi discovery: ${lastError.message}\n` +
+                `Lỗi không discovery: ${error2.message}\n\n` +
+                `Vui lòng kiểm tra:\n` +
+                `1. Network có đang chạy: docker ps | grep peer (phải thấy peer0.org1 và peer0.org2)\n` +
+                `2. Chaincode đã deploy: docker ps | grep qlhscb (phải thấy 2 containers)\n` +
+                `3. Wallet có user: ls -la wallet/ (phải thấy admin/ và appUser/)\n` +
+                `4. Connection profile chỉ có 1 peer, nhưng network có 2 peers. Có thể cần bật discovery.`);
+        }
+    }
 }
 
 // Health check endpoint
@@ -357,33 +436,94 @@ app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, password, fullName, email, role } = req.body;
 
+        console.log(`[DEBUG] [REGISTER] Received registration request:`);
+        console.log(`  Username: ${username}`);
+        console.log(`  FullName: ${fullName}`);
+        console.log(`  Email: ${email}`);
+        console.log(`  Role: ${role || 'user'}`);
+
         if (!username || !password || !fullName || !email) {
             return res.status(400).json({ error: 'Thiếu thông tin bắt buộc' });
         }
 
         const userName = process.env.USER_NAME || 'appUser';
+        console.log(`[DEBUG] [REGISTER] Using identity: ${userName}`);
+        
         gateway = await getGateway(userName);
+        console.log(`[DEBUG] [REGISTER] Gateway obtained successfully`);
+        
         const network = await gateway.getNetwork('mychannel');
+        console.log(`[DEBUG] [REGISTER] Network 'mychannel' obtained`);
+        
         const contract = network.getContract('qlhscb');
+        console.log(`[DEBUG] [REGISTER] Contract 'qlhscb' obtained`);
 
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
+        console.log(`[DEBUG] [REGISTER] Password hashed`);
         
         // Tạo timestamp để đảm bảo deterministic trong chaincode
         const timestamp = new Date().toISOString();
+        console.log(`[DEBUG] [REGISTER] Timestamp: ${timestamp}`);
+
+        console.log(`[DEBUG] [REGISTER] Submitting transaction createUser...`);
+        console.log(`[DEBUG] [REGISTER] Transaction parameters:`);
+        console.log(`  - username: ${username}`);
+        console.log(`  - hashedPassword: ${hashedPassword.substring(0, 20)}...`);
+        console.log(`  - fullName: ${fullName}`);
+        console.log(`  - email: ${email}`);
+        console.log(`  - phone: ${req.body.phone || ''}`);
+        console.log(`  - role: ${role || 'user'}`);
+        console.log(`  - timestamp: ${timestamp}`);
 
         await contract.submitTransaction('createUser', username, hashedPassword, fullName, email, req.body.phone || '', role || 'user', timestamp);
         
+        console.log(`[DEBUG] [REGISTER] Transaction submitted successfully!`);
+        
         if (gateway) {
             await gateway.disconnect();
+            console.log(`[DEBUG] [REGISTER] Gateway disconnected`);
         }
         res.json({ success: true, message: 'Đăng ký thành công' });
     } catch (error) {
         console.error(`[REGISTER] Error registering user:`, error.message || 'Registration failed');
         
+        // Log chi tiết lỗi
+        console.error(`[DEBUG] [REGISTER] Full error details:`);
+        console.error(`  Error name: ${error.name || 'N/A'}`);
+        console.error(`  Error message: ${error.message || 'N/A'}`);
+        if (error.stack) {
+            console.error(`  Stack trace:`);
+            console.error(error.stack);
+        }
+        if (error.errors) {
+            console.error(`  Errors array:`, JSON.stringify(error.errors, null, 2));
+        }
+        if (error.cause) {
+            console.error(`  Cause:`, JSON.stringify(error.cause, null, 2));
+        }
+        
+        // Log peer info nếu có
+        if (ccp.peers) {
+            console.error(`[DEBUG] [REGISTER] Available peers in connection profile:`);
+            Object.keys(ccp.peers).forEach(peerName => {
+                const peer = ccp.peers[peerName];
+                console.error(`  - ${peerName}:`);
+                console.error(`    URL: ${peer.url || 'N/A'}`);
+                console.error(`    Event URL: ${peer.eventUrl || 'N/A'}`);
+            });
+        }
+        
+        // Log network status
+        console.error(`[DEBUG] [REGISTER] Network status check:`);
+        console.error(`  - Channel: mychannel`);
+        console.error(`  - Chaincode: qlhscb`);
+        console.error(`  - Identity: ${process.env.USER_NAME || 'appUser'}`);
+        
         if (gateway) {
             try {
                 await gateway.disconnect();
+                console.log(`[DEBUG] [REGISTER] Gateway disconnected after error`);
             } catch (disconnectError) {
                 console.error(`[REGISTER] Error disconnecting gateway:`, disconnectError.message || 'Disconnect failed');
             }
@@ -392,7 +532,14 @@ app.post('/api/auth/register', async (req, res) => {
         // Xử lý các lỗi cụ thể
         let errorMessage = error.message || 'Đăng ký thất bại';
         
-        if (errorMessage.includes('Peer endorsements do not match')) {
+        if (errorMessage.includes('No valid responses from any peers')) {
+            errorMessage = `Lỗi: Không nhận được phản hồi từ peers.\n` +
+                `Vui lòng kiểm tra:\n` +
+                `1. Network: docker ps | grep peer (phải thấy peer0.org1 và peer0.org2)\n` +
+                `2. Chaincode: docker ps | grep qlhscb (phải thấy 2 containers)\n` +
+                `3. Wallet: ls -la wallet/ (phải thấy admin/ và appUser/)\n` +
+                `4. Xem log chi tiết ở trên để biết thêm thông tin.`;
+        } else if (errorMessage.includes('Peer endorsements do not match')) {
             errorMessage = 'Lỗi blockchain: Chaincode chưa được deploy đúng hoặc network chưa chạy. Vui lòng kiểm tra lại.';
         } else if (errorMessage.includes('chaincode') || errorMessage.includes('chaincode name')) {
             errorMessage = 'Lỗi: Chaincode chưa được deploy. Chạy: cd /fabric-samples/test-network && ./network.sh deployCC -ccn qlhscb -ccp ../chaincode/qlhscb/javascript -ccl javascript';
