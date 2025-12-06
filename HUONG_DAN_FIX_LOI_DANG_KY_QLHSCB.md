@@ -65,20 +65,18 @@ ls -la /fabric-samples/test-network/organizations/ 2>/dev/null
 find / -name "msp" -type d 2>/dev/null | grep org1
 ```
 
-**Bước 3: Thiết lập biến môi trường cho Org1 (sau khi tìm được đường dẫn đúng)**
+**Bước 3: Thiết lập biến môi trường cho Org1 (Đường dẫn đúng)**
 
 ```bash
-# Cách 1: Nếu đường dẫn là /fabric-samples/test-network/organizations/
+# Đường dẫn đúng trong container cli (đã kiểm tra)
 export CORE_PEER_TLS_ENABLED=true
 export CORE_PEER_LOCALMSPID="Org1MSP"
-export CORE_PEER_TLS_ROOTCERT_FILE=/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
-export CORE_PEER_MSPCONFIGPATH=/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
 export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
-
-# Cách 2: Nếu đường dẫn là /opt/gopath/... (kiểm tra trước)
-# export CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
-# export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
 ```
+
+**Lưu ý:** Đường dẫn đúng là `/opt/gopath/.../peer/organizations/...` (KHÔNG phải `/opt/gopath/.../peer/crypto/...`)
 
 **Kiểm tra đường dẫn có đúng không:**
 
@@ -471,8 +469,8 @@ Tạo file `setup_cli_org1.sh`:
 
 export CORE_PEER_TLS_ENABLED=true
 export CORE_PEER_LOCALMSPID="Org1MSP"
-export CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
-export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
 export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
 
 echo "✅ Đã thiết lập biến môi trường cho Org1"
@@ -502,8 +500,8 @@ peer lifecycle chaincode querycommitted -C mychannel --name qlhscb
 
 export CORE_PEER_TLS_ENABLED=true
 export CORE_PEER_LOCALMSPID="Org2MSP"
-export CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt
-export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org2.example.com/users/Admin@org2.example.com/msp
+export CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/org2.example.com/users/Admin@org2.example.com/msp
 export CORE_PEER_ADDRESS=peer0.org2.example.com:9051
 
 echo "✅ Đã thiết lập biến môi trường cho Org2"
