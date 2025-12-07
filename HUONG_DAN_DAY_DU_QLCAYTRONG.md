@@ -1171,7 +1171,7 @@ npm install xlsx
 3. Kiểm tra firewall/antivirus có chặn không
 4. Nếu không cấu hình email, reset password vẫn hoạt động nhưng token sẽ được trả về trong response
 
-## 🔧 Bước 6: Sử dụng lệnh peer (Tùy chọn)
+## 🔧 Bước 6: Sử dụng lệnh peer truy xuất thông tin trên chaincode qlcaytrong
 
 ### 6.1. Thiết lập biến môi trường
 
@@ -1188,10 +1188,29 @@ export CORE_PEER_MSPCONFIGPATH=$HOME_TESTNETWORK/organizations/peerOrganizations
 export CORE_PEER_ADDRESS=localhost:7051
 ```
 
-### 6.2. Các lệnh peer phổ biến
+### 6.2. Kiểm tra channel và chaincode
 
 ```bash
-# Khởi tạo dữ liệu
+# Xem danh sách channel
+peer channel list
+
+# Xem chaincode đã committed trên channel
+peer lifecycle chaincode querycommitted -C mychannel
+
+# Xem chaincode đã installed trên peer
+peer lifecycle chaincode queryinstalled
+
+# Kiểm tra chaincode đã sẵn sàng để commit chưa
+peer lifecycle chaincode checkcommitreadiness -C mychannel --name qlcaytrong --version 1.0 --sequence 1 --init-required
+
+# Xem các chaincode definition đã được approved
+peer lifecycle chaincode queryapproved -C mychannel --name qlcaytrong
+```
+
+### 6.3. Khởi tạo dữ liệu mẫu
+
+```bash
+# Khởi tạo dữ liệu mẫu (tạo 5 cây trồng mẫu)
 peer chaincode invoke -o localhost:7050 \
   --ordererTLSHostnameOverride orderer.example.com \
   --tls \
@@ -1202,7 +1221,19 @@ peer chaincode invoke -o localhost:7050 \
   --peerAddresses localhost:9051 \
   --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt \
   -c '{"function":"initLedger","Args":[]}'
+```
 
+### 6.4. Kiểm tra metadata chaincode
+
+```bash
+# Xem metadata của chaincode (danh sách các function có sẵn)
+peer chaincode query -C mychannel -n qlcaytrong \
+  -c '{"function":"org.hyperledger.fabric:GetMetadata","Args":[]}'
+```
+
+### 6.5. Truy vấn dữ liệu (Query)
+
+```bash
 # Truy vấn tất cả cây trồng
 peer chaincode query -C mychannel -n qlcaytrong \
   -c '{"function":"queryAllCayTrong","Args":[]}'
@@ -1210,24 +1241,134 @@ peer chaincode query -C mychannel -n qlcaytrong \
 # Truy vấn cây trồng theo mã
 peer chaincode query -C mychannel -n qlcaytrong \
   -c '{"function":"queryCayTrong","Args":["CT001"]}'
+
+# Tìm kiếm cây trồng (full-text search)
+peer chaincode query -C mychannel -n qlcaytrong \
+  -c '{"function":"searchCayTrong","Args":["cà phê"]}'
+
+# Tìm cây trồng theo loại
+peer chaincode query -C mychannel -n qlcaytrong \
+  -c '{"function":"queryCayTrongByLoai","Args":["Cây công nghiệp"]}'
+
+# Tìm cây trồng theo giai đoạn
+peer chaincode query -C mychannel -n qlcaytrong \
+  -c '{"function":"queryCayTrongByGiaiDoan","Args":["Trưởng thành"]}'
+
+# Lọc cây trồng (kết hợp nhiều tiêu chí)
+peer chaincode query -C mychannel -n qlcaytrong \
+  -c '{"function":"filterCayTrong","Args":["Cây công nghiệp","Trưởng thành","Đắk Lắk"]}'
 ```
 
-### 6.3. Lỗi CLI Container
+### 6.6. Tạo và cập nhật dữ liệu (Invoke)
 
 ```bash
+# Tạo cây trồng mới
+peer chaincode invoke -o localhost:7050 \
+  --ordererTLSHostnameOverride orderer.example.com \
+  --tls \
+  --cafile $HOME_TESTNETWORK/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem \
+  -C mychannel -n qlcaytrong \
+  --peerAddresses localhost:7051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt \
+  --peerAddresses localhost:9051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt \
+  -c '{"function":"createCayTrong","Args":["CT006","Cà phê Robusta","Cây công nghiệp","2023-01-15","Đang phát triển","2.8","1200","Lâm Đồng"]}'
+
+# Cập nhật thông tin cây trồng
+peer chaincode invoke -o localhost:7050 \
+  --ordererTLSHostnameOverride orderer.example.com \
+  --tls \
+  --cafile $HOME_TESTNETWORK/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem \
+  -C mychannel -n qlcaytrong \
+  --peerAddresses localhost:7051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt \
+  --peerAddresses localhost:9051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt \
+  -c '{"function":"updateCayTrong","Args":["CT001","Cà phê Arabica Premium","Cây công nghiệp","2020-01-15","Trưởng thành","3.0","1000","Đắk Lắk"]}'
+
+# Chuyển giai đoạn cây trồng
+peer chaincode invoke -o localhost:7050 \
+  --ordererTLSHostnameOverride orderer.example.com \
+  --tls \
+  --cafile $HOME_TESTNETWORK/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem \
+  -C mychannel -n qlcaytrong \
+  --peerAddresses localhost:7051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt \
+  --peerAddresses localhost:9051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt \
+  -c '{"function":"changeGiaiDoanCayTrong","Args":["CT001","Thu hoạch"]}'
+
+# Cập nhật năng suất
+peer chaincode invoke -o localhost:7050 \
+  --ordererTLSHostnameOverride orderer.example.com \
+  --tls \
+  --cafile $HOME_TESTNETWORK/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem \
+  -C mychannel -n qlcaytrong \
+  --peerAddresses localhost:7051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt \
+  --peerAddresses localhost:9051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt \
+  -c '{"function":"updateNangSuat","Args":["CT001","3.2"]}'
+
+# Xóa cây trồng
+peer chaincode invoke -o localhost:7050 \
+  --ordererTLSHostnameOverride orderer.example.com \
+  --tls \
+  --cafile $HOME_TESTNETWORK/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem \
+  -C mychannel -n qlcaytrong \
+  --peerAddresses localhost:7051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt \
+  --peerAddresses localhost:9051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt \
+  -c '{"function":"deleteCayTrong","Args":["CT006"]}'
+```
+
+### 6.7. Lưu ý về tham số trong lệnh createCayTrong
+
+**Cú pháp:**
+```bash
+createCayTrong(maCay, tenCay, loaiCay, ngayTrong, giaiDoan, nangSuat, dienTich, viTri)
+```
+
+**Ví dụ:**
+```bash
+-c '{"function":"createCayTrong","Args":["CT006","Cà phê Robusta","Cây công nghiệp","2023-01-15","Đang phát triển","2.8","1200","Lâm Đồng"]}'
+```
+
+**Giải thích các tham số:**
+- `maCay`: Mã cây (unique, ví dụ: "CT006")
+- `tenCay`: Tên cây (ví dụ: "Cà phê Robusta")
+- `loaiCay`: Loại cây (ví dụ: "Cây công nghiệp", "Cây ăn quả", "Cây gia vị")
+- `ngayTrong`: Ngày trồng (format: "YYYY-MM-DD", ví dụ: "2023-01-15")
+- `giaiDoan`: Giai đoạn (ví dụ: "Mới trồng", "Đang phát triển", "Trưởng thành", "Thu hoạch")
+- `nangSuat`: Năng suất (số thực, đơn vị: tấn/ha, ví dụ: "2.8")
+- `dienTich`: Diện tích (số thực, đơn vị: ha, ví dụ: "1200")
+- `viTri`: Vị trí (ví dụ: "Lâm Đồng", "Đắk Lắk", "Bình Phước")
+
+### 6.8. Sử dụng trong CLI Container
+
+Nếu gặp lỗi khi chạy lệnh peer trực tiếp, có thể sử dụng CLI container:
+
+```bash
+# Vào CLI container
 docker exec -it cli bash
 
+# Thiết lập biến môi trường trong container
 export CORE_PEER_TLS_ENABLED=true
 export CORE_PEER_LOCALMSPID=Org1MSP
-export CORE_PEER_MSPCONFIGPATH=/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
 export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
-export CORE_PEER_TLS_ROOTCERT_FILE=/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
+export CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
 
-# kiểm tra lại 
+# Kiểm tra lại đường dẫn
 ls $CORE_PEER_MSPCONFIGPATH
 
-# chay lại query chaincode 
+# Chạy lại query chaincode
 peer lifecycle chaincode querycommitted -C mychannel
+
+# Truy vấn dữ liệu
+peer chaincode query -C mychannel -n qlcaytrong \
+  -c '{"function":"queryAllCayTrong","Args":[]}'
 ```
 
 ---

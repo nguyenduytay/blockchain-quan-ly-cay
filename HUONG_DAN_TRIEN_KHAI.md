@@ -333,7 +333,7 @@ curl -X POST URL_BACK_END/api/caytrong \
    - Chuyển giai đoạn
    - Cập nhật năng suất
 
-## Bước 7: Sử dụng lệnh peer (Tùy chọn)
+## Bước 7: Sử dụng lệnh peer truy xuất thông tin trên chaincode qlcaytrong
 
 ### 7.1. Thiết lập biến môi trường
 
@@ -350,10 +350,29 @@ export CORE_PEER_MSPCONFIGPATH=$HOME_TESTNETWORK/organizations/peerOrganizations
 export CORE_PEER_ADDRESS=localhost:7051
 ```
 
-### 7.2. Các lệnh peer phổ biến
+### 7.2. Kiểm tra channel và chaincode
 
 ```bash
-# Khởi tạo dữ liệu
+# Xem danh sách channel
+peer channel list
+
+# Xem chaincode đã committed trên channel
+peer lifecycle chaincode querycommitted -C mychannel
+
+# Xem chaincode đã installed trên peer
+peer lifecycle chaincode queryinstalled
+
+# Kiểm tra chaincode đã sẵn sàng để commit chưa
+peer lifecycle chaincode checkcommitreadiness -C mychannel --name qlcaytrong --version 1.0 --sequence 1 --init-required
+
+# Xem các chaincode definition đã được approved
+peer lifecycle chaincode queryapproved -C mychannel --name qlcaytrong
+```
+
+### 7.3. Khởi tạo dữ liệu mẫu
+
+```bash
+# Khởi tạo dữ liệu mẫu (tạo 5 cây trồng mẫu)
 peer chaincode invoke -o localhost:7050 \
   --ordererTLSHostnameOverride orderer.example.com \
   --tls \
@@ -364,7 +383,19 @@ peer chaincode invoke -o localhost:7050 \
   --peerAddresses localhost:9051 \
   --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt \
   -c '{"function":"initLedger","Args":[]}'
+```
 
+### 7.4. Kiểm tra metadata chaincode
+
+```bash
+# Xem metadata của chaincode (danh sách các function có sẵn)
+peer chaincode query -C mychannel -n qlcaytrong \
+  -c '{"function":"org.hyperledger.fabric:GetMetadata","Args":[]}'
+```
+
+### 7.5. Truy vấn dữ liệu (Query)
+
+```bash
 # Truy vấn tất cả cây trồng
 peer chaincode query -C mychannel -n qlcaytrong \
   -c '{"function":"queryAllCayTrong","Args":[]}'
@@ -372,7 +403,73 @@ peer chaincode query -C mychannel -n qlcaytrong \
 # Truy vấn cây trồng theo mã
 peer chaincode query -C mychannel -n qlcaytrong \
   -c '{"function":"queryCayTrong","Args":["CT001"]}'
+
+# Tìm kiếm cây trồng (full-text search)
+peer chaincode query -C mychannel -n qlcaytrong \
+  -c '{"function":"searchCayTrong","Args":["cà phê"]}'
+
+# Tìm cây trồng theo loại
+peer chaincode query -C mychannel -n qlcaytrong \
+  -c '{"function":"queryCayTrongByLoai","Args":["Cây công nghiệp"]}'
+
+# Tìm cây trồng theo giai đoạn
+peer chaincode query -C mychannel -n qlcaytrong \
+  -c '{"function":"queryCayTrongByGiaiDoan","Args":["Trưởng thành"]}'
+
+# Lọc cây trồng (kết hợp nhiều tiêu chí)
+peer chaincode query -C mychannel -n qlcaytrong \
+  -c '{"function":"filterCayTrong","Args":["Cây công nghiệp","Trưởng thành","Đắk Lắk"]}'
 ```
+
+### 7.6. Tạo và cập nhật dữ liệu (Invoke)
+
+```bash
+# Tạo cây trồng mới
+peer chaincode invoke -o localhost:7050 \
+  --ordererTLSHostnameOverride orderer.example.com \
+  --tls \
+  --cafile $HOME_TESTNETWORK/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem \
+  -C mychannel -n qlcaytrong \
+  --peerAddresses localhost:7051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt \
+  --peerAddresses localhost:9051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt \
+  -c '{"function":"createCayTrong","Args":["CT006","Cà phê Robusta","Cây công nghiệp","2023-01-15","Đang phát triển","2.8","1200","Lâm Đồng"]}'
+
+# Chuyển giai đoạn cây trồng
+peer chaincode invoke -o localhost:7050 \
+  --ordererTLSHostnameOverride orderer.example.com \
+  --tls \
+  --cafile $HOME_TESTNETWORK/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem \
+  -C mychannel -n qlcaytrong \
+  --peerAddresses localhost:7051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt \
+  --peerAddresses localhost:9051 \
+  --tlsRootCertFiles $HOME_TESTNETWORK/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt \
+  -c '{"function":"changeGiaiDoanCayTrong","Args":["CT001","Thu hoạch"]}'
+```
+
+### 7.7. Lưu ý về tham số trong lệnh createCayTrong
+
+**Cú pháp:**
+```bash
+createCayTrong(maCay, tenCay, loaiCay, ngayTrong, giaiDoan, nangSuat, dienTich, viTri)
+```
+
+**Ví dụ:**
+```bash
+-c '{"function":"createCayTrong","Args":["CT006","Cà phê Robusta","Cây công nghiệp","2023-01-15","Đang phát triển","2.8","1200","Lâm Đồng"]}'
+```
+
+**Giải thích các tham số:**
+- `maCay`: Mã cây (unique, ví dụ: "CT006")
+- `tenCay`: Tên cây (ví dụ: "Cà phê Robusta")
+- `loaiCay`: Loại cây (ví dụ: "Cây công nghiệp", "Cây ăn quả", "Cây gia vị")
+- `ngayTrong`: Ngày trồng (format: "YYYY-MM-DD", ví dụ: "2023-01-15")
+- `giaiDoan`: Giai đoạn (ví dụ: "Mới trồng", "Đang phát triển", "Trưởng thành", "Thu hoạch")
+- `nangSuat`: Năng suất (số thực, đơn vị: tấn/ha, ví dụ: "2.8")
+- `dienTich`: Diện tích (số thực, đơn vị: ha, ví dụ: "1200")
+- `viTri`: Vị trí (ví dụ: "Lâm Đồng", "Đắk Lắk", "Bình Phước")
 
 ## Xử lý lỗi thường gặp
 
