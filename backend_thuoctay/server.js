@@ -82,9 +82,9 @@ async function getGateway(userName) {
     
     try {
         console.log(`[DEBUG] Attempting to connect gateway with discovery enabled (timeout 10s)...`);
-        await gateway.connect(ccp, {
-            wallet,
-            identity: userName,
+    await gateway.connect(ccp, {
+        wallet,
+        identity: userName,
             discovery: { 
                 enabled: true, 
                 asLocalhost: true,

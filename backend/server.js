@@ -894,7 +894,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
         // Send email (if configured)
         if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-            const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+            const resetUrl = `${process.env.FRONTEND_URL || 'http://192.168.80.10:3000'}/reset-password?token=${resetToken}`;
             await emailTransporter.sendMail({
                 from: process.env.SMTP_USER,
                 to: email,
@@ -1257,9 +1257,13 @@ if (process.env.ENABLE_SCHEDULED_REPORTS === 'true') {
 }
 
 // Start server
-app.listen(PORT, () => {
+// Get server host from environment or use default
+const SERVER_HOST = process.env.SERVER_HOST || '192.168.80.10';
+
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 QLCayTrong API Server đang chạy trên port ${PORT}`);
-    console.log(`📡 Health check: http://localhost:${PORT}/health`);
-    console.log(`🌐 API Base URL: http://localhost:${PORT}/api`);
+    console.log(`📡 Health check: http://${SERVER_HOST}:${PORT}/health`);
+    console.log(`🌐 API Base URL: http://${SERVER_HOST}:${PORT}/api`);
+    console.log(`🔗 Local access: http://localhost:${PORT}/health`);
 });
 

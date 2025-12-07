@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Su dung proxy trong development de tranh CORS
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://16.19.0.15:3006/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://192.168.80.10:3006/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
